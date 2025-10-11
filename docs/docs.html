@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦊 Nox Documentation</title>
+    <meta name="description" content="Complete documentation for Nox, your AI coding fox. Learn how to set up API keys, use commands, and maximize your productivity.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .docs-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 8rem 2rem 4rem;
+        }
+        .docs-nav {
+            background: var(--bg-secondary);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+        }
+        .docs-nav h3 {
+            margin-bottom: 1rem;
+            color: var(--aurora-blue);
+        }
+        .docs-nav ul {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .docs-nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 0.5rem 0;
+            display: block;
+            transition: color 0.3s ease;
+        }
+        .docs-nav a:hover {
+            color: var(--aurora-blue);
+        }
+        .docs-section {
+            background: var(--bg-secondary);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(76, 154, 255, 0.1);
+        }
+        .docs-section h2 {
+            color: var(--aurora-blue);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .docs-section h3 {
+            margin: 2rem 0 1rem;
+            color: var(--text-primary);
+        }
+        .docs-section code {
+            background: var(--bg-tertiary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            color: var(--aurora-cyan);
+        }
+        .docs-section pre {
+            background: var(--bg-tertiary);
+            padding: 1.5rem;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border: 1px solid rgba(76, 154, 255, 0.2);
+        }
+        .docs-section pre code {
+            background: none;
+            padding: 0;
+        }
+        .api-key-warning {
+            background: rgba(244, 114, 182, 0.1);
+            border: 1px solid rgba(244, 114, 182, 0.3);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .api-key-warning h4 {
+            color: var(--aurora-pink);
+            margin-bottom: 0.5rem;
+        }
+        .command-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .command-card {
+            background: var(--bg-tertiary);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 1px solid rgba(76, 154, 255, 0.1);
+        }
+        .command-card h4 {
+            color: var(--aurora-blue);
+            margin-bottom: 0.5rem;
+        }
+        .command-card .shortcut {
+            background: var(--bg-primary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            color: var(--aurora-cyan);
+            margin-top: 0.5rem;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="fox-icon">🦊</span>
+                <span class="brand-text">Nox</span>
+            </div>
+            <div class="nav-links">
+                <a href="index.html">Home</a>
+                <a href="#installation">Installation</a>
+                <a href="#api-keys">API Keys</a>
+                <a href="#commands">Commands</a>
+                <a href="https://github.com/hadep275/Agent-Nox" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="docs-container">
+        <div class="section-header">
+            <h1>🦊 Nox Documentation</h1>
+            <p>Everything you need to know about your AI coding fox</p>
+        </div>
+
+        <!-- Quick Navigation -->
+        <div class="docs-nav">
+            <h3>📚 Quick Navigation</h3>
+            <ul>
+                <li><a href="#installation">🚀 Installation</a></li>
+                <li><a href="#api-keys">🔑 API Key Setup</a></li>
+                <li><a href="#commands">⚡ Commands</a></li>
+                <li><a href="#configuration">⚙️ Configuration</a></li>
+                <li><a href="#troubleshooting">🔧 Troubleshooting</a></li>
+                <li><a href="#enterprise">🏢 Enterprise Features</a></li>
+            </ul>
+        </div>
+
+        <!-- Installation -->
+        <section id="installation" class="docs-section">
+            <h2>🚀 Installation</h2>
+            
+            <h3>Method 1: VS Code Marketplace (Coming Soon)</h3>
+            <p>Search for "Nox" in the VS Code Extensions marketplace and click Install.</p>
+            
+            <h3>Method 2: From GitHub (Current)</h3>
+            <ol>
+                <li>Clone the repository:</li>
+            </ol>
+            <pre><code>git clone https://github.com/hadep275/Agent-Nox.git
+cd Agent-Nox</code></pre>
+            
+            <ol start="2">
+                <li>Install dependencies:</li>
+            </ol>
+            <pre><code>npm install</code></pre>
+            
+            <ol start="3">
+                <li>Open in VS Code and press <code>F5</code> to launch in development mode</li>
+            </ol>
+
+            <h3>Method 3: Install .vsix Package</h3>
+            <p>If you have a .vsix package file:</p>
+            <pre><code>code --install-extension nox-vscode-0.1.0.vsix</code></pre>
+        </section>
+
+        <!-- API Keys -->
+        <section id="api-keys" class="docs-section">
+            <h2>🔑 API Key Setup</h2>
+            
+            <div class="api-key-warning">
+                <h4>🔒 Privacy First</h4>
+                <p>Nox stores your API keys securely using VS Code's built-in SecretStorage. Your keys never leave your machine and are not sent to any external servers except the AI provider you choose.</p>
+            </div>
+
+            <h3>Supported AI Providers</h3>
+            
+            <h4>🤖 Anthropic Claude</h4>
+            <ol>
+                <li>Get your API key from <a href="https://console.anthropic.com/" target="_blank">Anthropic Console</a></li>
+                <li>Open VS Code Settings (<code>Ctrl+,</code>)</li>
+                <li>Search for "nox.anthropic.apiKey"</li>
+                <li>Enter your API key</li>
+            </ol>
+            <pre><code>{
+  "nox.aiProvider": "anthropic",
+  "nox.anthropic.apiKey": "sk-ant-api03-..."
+}</code></pre>
+
+            <h4>🧠 OpenAI GPT-4</h4>
+            <ol>
+                <li>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a></li>
+                <li>Configure in VS Code Settings:</li>
+            </ol>
+            <pre><code>{
+  "nox.aiProvider": "openai",
+  "nox.openai.apiKey": "sk-..."
+}</code></pre>
+
+            <h4>⚡ DeepSeek</h4>
+            <ol>
+                <li>Get your API key from <a href="https://platform.deepseek.com/" target="_blank">DeepSeek Platform</a></li>
+                <li>Configure in VS Code Settings:</li>
+            </ol>
+            <pre><code>{
+  "nox.aiProvider": "deepseek",
+  "nox.deepseek.apiKey": "sk-..."
+}</code></pre>
+
+            <h4>🏠 Local Models (Coming Soon)</h4>
+            <p>Support for local LLMs via Ollama, LM Studio, and other local inference engines.</p>
+        </section>
+
+        <!-- Commands -->
+        <section id="commands" class="docs-section">
+            <h2>⚡ Commands</h2>
+            <p>Access all Nox commands via the Command Palette (<code>Ctrl+Shift+P</code>) or use the shortcuts below:</p>
+
+            <div class="command-grid">
+                <div class="command-card">
+                    <h4>🦊 Nox: Start Chat</h4>
+                    <p>Open an interactive chat interface with your AI fox. Ask questions, get explanations, or brainstorm ideas.</p>
+                    <div class="shortcut">Ctrl+Shift+P → "Nox: Start Chat"</div>
+                </div>
+
+                <div class="command-card">
+                    <h4>🦊 Nox: Explain Code</h4>
+                    <p>Select any code and get intelligent explanations. Perfect for understanding complex logic or learning new patterns.</p>
+                    <div class="shortcut">Select code → Ctrl+Shift+P → "Nox: Explain"</div>
+                </div>
+
+                <div class="command-card">
+                    <h4>🦊 Nox: Refactor Code</h4>
+                    <p>Get smart refactoring suggestions for selected code. Improve performance, readability, and maintainability.</p>
+                    <div class="shortcut">Select code → Ctrl+Shift+P → "Nox: Refactor"</div>
+                </div>
+
+                <div class="command-card">
+                    <h4>🦊 Nox: Analyze Codebase</h4>
+                    <p>Comprehensive analysis of your entire codebase. Identify patterns, issues, and improvement opportunities.</p>
+                    <div class="shortcut">Ctrl+Shift+P → "Nox: Analyze"</div>
+                </div>
+
+                <div class="command-card">
+                    <h4>🦊 Nox: Performance Dashboard</h4>
+                    <p>View real-time metrics, API costs, and usage statistics. Monitor your AI assistance efficiency.</p>
+                    <div class="shortcut">Ctrl+Shift+P → "Nox: Dashboard"</div>
+                </div>
+
+                <div class="command-card">
+                    <h4>🦊 Nox: Settings</h4>
+                    <p>Configure your AI fox preferences, API keys, and advanced options.</p>
+                    <div class="shortcut">Ctrl+Shift+P → "Nox: Settings"</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Configuration -->
+        <section id="configuration" class="docs-section">
+            <h2>⚙️ Configuration</h2>
+            
+            <h3>Basic Settings</h3>
+            <pre><code>{
+  // Primary AI provider
+  "nox.aiProvider": "anthropic",
+  
+  // API Keys (stored securely)
+  "nox.anthropic.apiKey": "your-key-here",
+  "nox.openai.apiKey": "your-key-here",
+  "nox.deepseek.apiKey": "your-key-here",
+  
+  // Performance settings
+  "nox.maxContextSize": 100000,
+  "nox.enableCaching": true,
+  
+  // Monitoring
+  "nox.enableTelemetry": true,
+  "nox.logLevel": "info"
+}</code></pre>
+
+            <h3>Advanced Configuration</h3>
+            <ul>
+                <li><strong>maxContextSize</strong>: Maximum tokens to send to AI (default: 100,000)</li>
+                <li><strong>enableCaching</strong>: Cache responses for faster performance (default: true)</li>
+                <li><strong>enableTelemetry</strong>: Anonymous usage analytics (default: true)</li>
+                <li><strong>logLevel</strong>: Logging verbosity (debug, info, warn, error)</li>
+            </ul>
+        </section>
+
+        <!-- Troubleshooting -->
+        <section id="troubleshooting" class="docs-section">
+            <h2>🔧 Troubleshooting</h2>
+            
+            <h3>Common Issues</h3>
+            
+            <h4>❌ "API Key not found" Error</h4>
+            <ul>
+                <li>Ensure you've set the correct API key in VS Code Settings</li>
+                <li>Check that the key format matches your provider's format</li>
+                <li>Verify the key has sufficient credits/permissions</li>
+            </ul>
+
+            <h4>❌ Commands not appearing</h4>
+            <ul>
+                <li>Restart VS Code after installation</li>
+                <li>Check that the extension is enabled in Extensions panel</li>
+                <li>Look for error messages in the Output panel (View → Output → Nox)</li>
+            </ul>
+
+            <h4>❌ Slow responses</h4>
+            <ul>
+                <li>Check your internet connection</li>
+                <li>Try reducing <code>nox.maxContextSize</code></li>
+                <li>Enable caching with <code>nox.enableCaching: true</code></li>
+            </ul>
+
+            <h3>Getting Help</h3>
+            <ul>
+                <li>📋 Check the <a href="https://github.com/hadep275/Agent-Nox/issues" target="_blank">GitHub Issues</a></li>
+                <li>💬 Start a <a href="https://github.com/hadep275/Agent-Nox/discussions" target="_blank">Discussion</a></li>
+                <li>📧 Contact support for enterprise customers</li>
+            </ul>
+        </section>
+
+        <!-- Enterprise -->
+        <section id="enterprise" class="docs-section">
+            <h2>🏢 Enterprise Features</h2>
+            
+            <h3>Audit & Compliance</h3>
+            <ul>
+                <li>Complete audit trails for all AI interactions</li>
+                <li>Session tracking and user activity logs</li>
+                <li>File change tracking with timestamps</li>
+                <li>Compliance reporting for SOX, GDPR, HIPAA</li>
+            </ul>
+
+            <h3>Performance Monitoring</h3>
+            <ul>
+                <li>Real-time API cost tracking</li>
+                <li>Usage analytics and trends</li>
+                <li>Performance metrics and optimization suggestions</li>
+                <li>Team collaboration insights</li>
+            </ul>
+
+            <h3>Security</h3>
+            <ul>
+                <li>Local API key storage (never transmitted)</li>
+                <li>No data sent to external servers</li>
+                <li>Enterprise SSO integration (coming soon)</li>
+                <li>Custom deployment options</li>
+            </ul>
+
+            <h3>Contact Enterprise Sales</h3>
+            <p>For enterprise features, custom integrations, and volume licensing:</p>
+            <ul>
+                <li>📧 Email: enterprise@nox.dev</li>
+                <li>📞 Schedule a demo</li>
+                <li>💼 Custom pricing available</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="fox-icon">🦊</span>
+                    <span class="brand-text">Nox</span>
+                    <p>Your clever AI coding fox</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Documentation</h4>
+                        <a href="#installation">Installation</a>
+                        <a href="#api-keys">API Keys</a>
+                        <a href="#commands">Commands</a>
+                        <a href="#troubleshooting">Troubleshooting</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <a href="https://github.com/hadep275/Agent-Nox" target="_blank">GitHub</a>
+                        <a href="https://github.com/hadep275/Agent-Nox/issues" target="_blank">Issues</a>
+                        <a href="https://github.com/hadep275/Agent-Nox/discussions" target="_blank">Discussions</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Support</h4>
+                        <a href="index.html">Home</a>
+                        <a href="#enterprise">Enterprise</a>
+                        <a href="mailto:support@nox.dev">Contact</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Nox. Open source with ❤️</p>
+                <div class="footer-social">
+                    <a href="https://github.com/hadep275/Agent-Nox" target="_blank">GitHub</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

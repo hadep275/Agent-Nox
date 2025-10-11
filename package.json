@@ -1,0 +1,206 @@
+{
+  "name": "nox-vscode",
+  "displayName": "Nox - AI Coding Fox",
+  "description": "🦊 Your clever AI coding companion for enterprise-scale development",
+  "version": "0.1.0",
+  "publisher": "nox-ai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hadep275/Agent-Nox"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "assistant",
+    "coding",
+    "enterprise",
+    "nox",
+    "fox",
+    "claude",
+    "gpt",
+    "deepseek",
+    "productivity"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "nox.chat",
+        "title": "🦊 Nox: Start Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nox.explain",
+        "title": "🦊 Nox: Explain Code",
+        "icon": "$(info)"
+      },
+      {
+        "command": "nox.refactor",
+        "title": "🦊 Nox: Refactor Code",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "nox.analyze",
+        "title": "🦊 Nox: Analyze Codebase",
+        "icon": "$(search)"
+      },
+      {
+        "command": "nox.dashboard",
+        "title": "🦊 Nox: Performance Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "nox.settings",
+        "title": "🦊 Nox: Settings",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "nox.explain",
+          "when": "editorHasSelection",
+          "group": "nox@1"
+        },
+        {
+          "command": "nox.refactor",
+          "when": "editorHasSelection",
+          "group": "nox@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "nox.analyze",
+          "when": "explorerResourceIsFolder",
+          "group": "nox@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "nox.chat"
+        },
+        {
+          "command": "nox.explain",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "nox.refactor",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "nox.analyze"
+        },
+        {
+          "command": "nox.dashboard"
+        },
+        {
+          "command": "nox.settings"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "noxChat",
+          "name": "🦊 Nox Chat",
+          "when": "nox.activated"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nox",
+          "title": "🦊 Nox",
+          "icon": "$(heart)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "🦊 Nox",
+      "properties": {
+        "nox.aiProvider": {
+          "type": "string",
+          "default": "anthropic",
+          "enum": [
+            "anthropic",
+            "openai",
+            "deepseek",
+            "local"
+          ],
+          "description": "🦊 Primary AI provider for Nox"
+        },
+        "nox.anthropic.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "🔑 Your Anthropic API key (stored securely)"
+        },
+        "nox.openai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "🔑 Your OpenAI API key (stored securely)"
+        },
+        "nox.deepseek.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "🔑 Your DeepSeek API key (stored securely)"
+        },
+        "nox.enableTelemetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "📊 Enable usage analytics and performance telemetry"
+        },
+        "nox.maxContextSize": {
+          "type": "number",
+          "default": 100000,
+          "description": "📏 Maximum context size for AI requests"
+        },
+        "nox.enableCaching": {
+          "type": "boolean",
+          "default": true,
+          "description": "⚡ Enable intelligent caching for performance"
+        },
+        "nox.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "description": "📝 Logging level for Nox"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node ./test/runTest.js",
+    "lint": "eslint .",
+    "package": "npx @vscode/vsce package",
+    "publish": "npx @vscode/vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^18.0.0",
+    "eslint": "^8.0.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "uuid": "^9.0.0",
+    "chroma-js": "^2.4.2"
+  }
+}

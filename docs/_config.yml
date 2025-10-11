@@ -1,0 +1,73 @@
+# 🦊 Nox - GitHub Pages Configuration
+
+# Site settings
+title: "Nox - Your AI Coding Fox"
+description: "A clever AI coding companion for enterprise-scale development. Use your own API keys for complete privacy and control."
+url: "https://hadep275.github.io"
+baseurl: "/Agent-Nox"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Exclude files from processing
+exclude:
+  - README.md
+  - package.json
+  - extension.js
+  - src/
+  - test-extension.js
+  - .eslintrc.js
+  - .vscode/
+  - node_modules/
+
+# Include files
+include:
+  - _pages
+
+# Collections
+collections:
+  docs:
+    output: true
+    permalink: /:collection/:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: ""
+      type: "docs"
+    values:
+      layout: "doc"
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# SEO settings
+author: "Nox Team"
+twitter:
+  username: nox_ai
+  card: summary_large_image
+
+social:
+  name: Nox
+  links:
+    - https://github.com/hadep275/Agent-Nox
+
+# Google Analytics (optional)
+# google_analytics: UA-XXXXXXXX-X
+
+# GitHub Pages specific settings
+github:
+  repository_name: Agent-Nox
+  repository_url: https://github.com/hadep275/Agent-Nox
+  owner_name: hadep275
+  owner_url: https://github.com/hadep275
