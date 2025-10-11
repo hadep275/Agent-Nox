@@ -65,6 +65,11 @@
         "command": "nox.settings",
         "title": "🦊 Nox: Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "nox.apiKeys",
+        "title": "🔑 Nox: Manage API Keys",
+        "icon": "$(key)"
       }
     ],
     "menus": {

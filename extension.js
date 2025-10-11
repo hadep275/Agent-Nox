@@ -8,6 +8,7 @@ const ChatCommand = require("./src/commands/chatCommand");
 const ExplainCommand = require("./src/commands/explainCommand");
 const RefactorCommand = require("./src/commands/refactorCommand");
 const AnalyzeCommand = require("./src/commands/analyzeCommand");
+const ApiKeyCommand = require("./src/commands/apiKeyCommand");
 const AuditLogger = require("./src/enterprise/auditLogger");
 
 /**
@@ -148,6 +149,16 @@ class NoxExtension {
         // Settings command
         vscode.commands.registerCommand("nox.settings", async () => {
           return await this.showSettings();
+        }),
+
+        // API Key management command
+        vscode.commands.registerCommand("nox.apiKeys", async () => {
+          const apiKeyCommand = new ApiKeyCommand(
+            this.context,
+            this.logger,
+            this.agentController.aiClient
+          );
+          return await apiKeyCommand.execute();
         }),
       ];
 
