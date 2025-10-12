@@ -42,6 +42,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "nox.openChatPanel",
+        "title": "🦊 Nox: Open Chat Panel",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "nox.explain",
         "title": "🦊 Nox: Explain Code",
         "icon": "$(info)"

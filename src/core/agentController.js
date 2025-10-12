@@ -1,4 +1,4 @@
-const vscode = require('vscode');
+const vscode = require("vscode");
 // const path = require('path'); // Will be used in Phase 2
 
 /**
@@ -27,10 +27,10 @@ class AgentController {
    * Initialize the agent controller and all core components
    */
   async initialize() {
-    const timer = this.performanceMonitor.startTimer('agent_initialization');
+    const timer = this.performanceMonitor.startTimer("agent_initialization");
 
     try {
-      this.logger.info('Initializing Agent Controller...');
+      this.logger.info("Initializing Agent Controller...");
 
       // Load configuration
       await this.loadConfiguration();
@@ -47,12 +47,12 @@ class AgentController {
       this.isInitialized = true;
       timer.end();
 
-      this.logger.info('Agent Controller initialized successfully');
-      this.performanceMonitor.recordMetric('initialization_success', 1);
+      this.logger.info("Agent Controller initialized successfully");
+      this.performanceMonitor.recordMetric("initialization_success", 1);
     } catch (error) {
       timer.end();
-      this.logger.error('Failed to initialize Agent Controller:', error);
-      this.performanceMonitor.recordMetric('initialization_failure', 1);
+      this.logger.error("Failed to initialize Agent Controller:", error);
+      this.performanceMonitor.recordMetric("initialization_failure", 1);
       throw error;
     }
   }
@@ -62,24 +62,50 @@ class AgentController {
    */
   async loadConfiguration() {
     try {
-      this.configuration = vscode.workspace.getConfiguration('agent');
+      this.configuration = vscode.workspace.getConfiguration("nox");
 
-      // Validate required configuration
-      const requiredSettings = ['aiProvider'];
-      for (const setting of requiredSettings) {
-        if (!this.configuration.has(setting)) {
-          throw new Error(`Missing required configuration: ${setting}`);
-        }
-      }
+      // Set default values if not configured
+      const aiProvider = this.configuration.get("aiProvider", "anthropic");
+      const enableCaching = this.configuration.get("enableCaching", true);
+      const enableTelemetry = this.configuration.get("enableTelemetry", true);
+      const maxContextSize = this.configuration.get("maxContextSize", 100000);
+      const logLevel = this.configuration.get("logLevel", "info");
 
-      this.logger.debug('Configuration loaded', {
-        provider: this.configuration.get('aiProvider'),
-        caching: this.configuration.get('enableCaching'),
-        telemetry: this.configuration.get('enableTelemetry'),
+      this.logger.info("🦊 Nox configuration loaded", {
+        provider: aiProvider,
+        caching: enableCaching,
+        telemetry: enableTelemetry,
+        maxContextSize: maxContextSize,
+        logLevel: logLevel,
       });
+
+      // Store configuration for easy access
+      this.configValues = {
+        aiProvider,
+        enableCaching,
+        enableTelemetry,
+        maxContextSize,
+        logLevel,
+      };
     } catch (error) {
-      throw new Error(`Configuration loading failed: ${error.message}`);
+      this.logger.error("Configuration loading failed:", error);
+      // Use defaults if configuration fails
+      this.configValues = {
+        aiProvider: "anthropic",
+        enableCaching: true,
+        enableTelemetry: true,
+        maxContextSize: 100000,
+        logLevel: "info",
+      };
+      this.logger.info("🦊 Using default configuration values");
     }
+  }
+
+  /**
+   * Get configuration value with fallback
+   */
+  get(key, defaultValue = null) {
+    return this.configValues ? this.configValues[key] : defaultValue;
   }
 
   /**
@@ -91,10 +117,10 @@ class AgentController {
 
       if (workspaceFolders && workspaceFolders.length > 0) {
         this.workspacePath = workspaceFolders[0].uri.fsPath;
-        this.logger.info('Workspace detected', { path: this.workspacePath });
+        this.logger.info("Workspace detected", { path: this.workspacePath });
       } else {
         this.logger.warn(
-          'No workspace folder detected - some features may be limited'
+          "No workspace folder detected - some features may be limited"
         );
       }
     } catch (error) {
@@ -108,11 +134,11 @@ class AgentController {
   async initializeCoreComponents() {
     try {
       // Import core modules (lazy loading for performance)
-      const AIClient = require('./aiClient');
-      const ContextManager = require('./contextManager');
-      const FileOps = require('./fileOps');
-      const IndexEngine = require('./indexEngine');
-      const CacheManager = require('../storage/cacheManager');
+      const AIClient = require("./aiClient");
+      const ContextManager = require("./contextManager");
+      const FileOps = require("./fileOps");
+      const IndexEngine = require("./indexEngine");
+      const CacheManager = require("../storage/cacheManager");
 
       // Initialize in dependency order
       this.cacheManager = new CacheManager(this.context, this.logger);
@@ -148,7 +174,7 @@ class AgentController {
       );
       await this.indexEngine.initialize(this.workspacePath);
 
-      this.logger.info('Core components initialized successfully');
+      this.logger.info("Core components initialized successfully");
     } catch (error) {
       throw new Error(
         `Core components initialization failed: ${error.message}`
@@ -161,11 +187,11 @@ class AgentController {
    */
   async validateInitialization() {
     const components = [
-      { name: 'aiClient', instance: this.aiClient },
-      { name: 'contextManager', instance: this.contextManager },
-      { name: 'fileOps', instance: this.fileOps },
-      { name: 'indexEngine', instance: this.indexEngine },
-      { name: 'cacheManager', instance: this.cacheManager },
+      { name: "aiClient", instance: this.aiClient },
+      { name: "contextManager", instance: this.contextManager },
+      { name: "fileOps", instance: this.fileOps },
+      { name: "indexEngine", instance: this.indexEngine },
+      { name: "cacheManager", instance: this.cacheManager },
     ];
 
     for (const component of components) {
@@ -176,7 +202,7 @@ class AgentController {
       }
     }
 
-    this.logger.debug('All components validated successfully');
+    this.logger.debug("All components validated successfully");
   }
 
   /**
@@ -184,7 +210,7 @@ class AgentController {
    */
   async handleWorkspaceChange(_event) {
     try {
-      this.logger.info('Handling workspace change...');
+      this.logger.info("Handling workspace change...");
 
       // Reinitialize workspace
       await this.initializeWorkspace();
@@ -194,9 +220,9 @@ class AgentController {
         await this.indexEngine.reinitialize(this.workspacePath);
       }
 
-      this.logger.info('Workspace change handled successfully');
+      this.logger.info("Workspace change handled successfully");
     } catch (error) {
-      this.logger.error('Failed to handle workspace change:', error);
+      this.logger.error("Failed to handle workspace change:", error);
     }
   }
 
@@ -208,11 +234,11 @@ class AgentController {
       if (!this.indexEngine || !this.isInitialized) return;
 
       const filePath = document.uri.fsPath;
-      this.logger.debug('File changed, updating index', { filePath });
+      this.logger.debug("File changed, updating index", { filePath });
 
       await this.indexEngine.updateFileIndex(filePath, document.getText());
     } catch (error) {
-      this.logger.error('Failed to handle file change:', error);
+      this.logger.error("Failed to handle file change:", error);
     }
   }
 
@@ -221,7 +247,7 @@ class AgentController {
    */
   async updateConfiguration() {
     try {
-      this.logger.info('Updating configuration...');
+      this.logger.info("Updating configuration...");
 
       await this.loadConfiguration();
 
@@ -230,9 +256,9 @@ class AgentController {
         await this.aiClient.updateConfiguration(this.configuration);
       }
 
-      this.logger.info('Configuration updated successfully');
+      this.logger.info("Configuration updated successfully");
     } catch (error) {
-      this.logger.error('Failed to update configuration:', error);
+      this.logger.error("Failed to update configuration:", error);
     }
   }
 
@@ -263,7 +289,7 @@ class AgentController {
    */
   async executeTask(taskType, parameters = {}) {
     if (!this.isInitialized) {
-      throw new Error('Agent controller not initialized');
+      throw new Error("Agent controller not initialized");
     }
 
     const timer = this.performanceMonitor.startTimer(`task_${taskType}`);
@@ -276,7 +302,7 @@ class AgentController {
       const result = {
         taskType,
         parameters,
-        status: 'completed',
+        status: "completed",
         timestamp: Date.now(),
         message: `Task ${taskType} executed successfully (placeholder)`,
       };
@@ -298,7 +324,7 @@ class AgentController {
    */
   async cleanup() {
     try {
-      this.logger.info('Cleaning up Agent Controller...');
+      this.logger.info("Cleaning up Agent Controller...");
 
       const cleanupPromises = [];
 
@@ -321,9 +347,9 @@ class AgentController {
       await Promise.all(cleanupPromises);
 
       this.isInitialized = false;
-      this.logger.info('Agent Controller cleanup completed');
+      this.logger.info("Agent Controller cleanup completed");
     } catch (error) {
-      this.logger.error('Error during Agent Controller cleanup:', error);
+      this.logger.error("Error during Agent Controller cleanup:", error);
     }
   }
 }

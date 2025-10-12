@@ -10,6 +10,7 @@ const RefactorCommand = require("./src/commands/refactorCommand");
 const AnalyzeCommand = require("./src/commands/analyzeCommand");
 const ApiKeyCommand = require("./src/commands/apiKeyCommand");
 const AuditLogger = require("./src/enterprise/auditLogger");
+const ChatPanel = require("./src/webview/chatPanel");
 
 /**
  * 🦊 Nox - AI Coding Fox VS Code Extension
@@ -32,27 +33,34 @@ class NoxExtension {
     const startTime = Date.now();
 
     try {
+      console.log("🦊 Step 1: Setting context...");
       this.context = context;
 
+      console.log("🦊 Step 2: Initializing core services...");
       // Initialize core services
       await this.initializeCore();
 
+      console.log("🦊 Step 3: Registering commands...");
       // Register commands
       await this.registerCommands();
 
+      console.log("🦊 Step 4: Setting up event listeners...");
       // Set up event listeners
       this.setupEventListeners();
 
+      console.log("🦊 Step 5: Marking as activated...");
       // Mark as activated
       this.isActivated = true;
       await vscode.commands.executeCommand("setContext", "nox.activated", true);
 
       const activationTime = Date.now() - startTime;
+      console.log(`🦊 Step 6: Activation completed in ${activationTime}ms`);
       this.logger.info(
         `🦊 Nox extension activated successfully in ${activationTime}ms`
       );
       this.performanceMonitor.recordMetric("activation_time", activationTime);
 
+      console.log("🦊 Step 7: Showing welcome message...");
       // Show welcome message for first-time users
       await this.showWelcomeMessage();
     } catch (error) {
@@ -69,29 +77,37 @@ class NoxExtension {
    */
   async initializeCore() {
     try {
+      console.log("🦊 Core Step 1: Creating logger...");
       // Initialize logger first
       this.logger = new Logger(this.context);
-      this.logger.info("Initializing Agent extension core services...");
+      this.logger.info("Initializing Nox extension core services...");
 
+      console.log("🦊 Core Step 2: Creating performance monitor...");
       // Initialize performance monitoring
       this.performanceMonitor = new PerformanceMonitor(
         this.context,
         this.logger
       );
 
+      console.log("🦊 Core Step 3: Creating audit logger...");
       // Initialize audit logging
       this.auditLogger = new AuditLogger(this.context, this.logger);
 
+      console.log("🦊 Core Step 4: Creating agent controller...");
       // Initialize main agent controller
       this.agentController = new AgentController(
         this.context,
         this.logger,
         this.performanceMonitor
       );
+
+      console.log("🦊 Core Step 5: Initializing agent controller...");
       await this.agentController.initialize();
 
+      console.log("🦊 Core Step 6: Core services initialized!");
       this.logger.info("Core services initialized successfully");
     } catch (error) {
+      console.error("🦊 Core initialization failed:", error);
       if (this.logger) {
         this.logger.error("Failed to initialize core services:", error);
       }
@@ -105,13 +121,22 @@ class NoxExtension {
   async registerCommands() {
     try {
       const commands = [
-        // Chat command
+        // Chat command (legacy)
         vscode.commands.registerCommand("nox.chat", async () => {
           const chatCommand = new ChatCommand(
             this.agentController,
             this.logger
           );
           return await chatCommand.execute();
+        }),
+
+        // Chat Panel command (new webview interface)
+        vscode.commands.registerCommand("nox.openChatPanel", async () => {
+          ChatPanel.createOrShow(
+            this.context,
+            this.agentController,
+            this.logger
+          );
         }),
 
         // Explain code command
@@ -296,8 +321,28 @@ let extensionInstance = null;
  * VS Code extension activation entry point
  */
 async function activate(context) {
-  extensionInstance = new NoxExtension();
-  await extensionInstance.activate(context);
+  console.log("🦊 Nox extension is being activated...");
+  console.log("🦊 Extension context:", context.extensionPath);
+
+  try {
+    // Show immediate feedback
+    vscode.window.showInformationMessage("🦊 Nox extension is loading...");
+
+    extensionInstance = new NoxExtension();
+    await extensionInstance.activate(context);
+
+    // Show success message
+    vscode.window.showInformationMessage(
+      "🦊 Nox extension activated successfully! Try Ctrl+Shift+P and type 'Nox'"
+    );
+
+    console.log("🦊 Nox extension activation completed successfully!");
+  } catch (error) {
+    console.error("🦊 Nox extension activation failed:", error);
+    vscode.window.showErrorMessage(
+      `🦊 Nox activation failed: ${error.message}`
+    );
+  }
 }
 
 /**

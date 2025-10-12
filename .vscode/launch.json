@@ -2,16 +2,15 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Agent Extension",
+            "name": "🦊 Run Nox Extension",
             "type": "extensionHost",
             "request": "launch",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "outFiles": [
-                "${workspaceFolder}/out/**/*.js"
-            ],
-            "preLaunchTask": "${workspaceFolder}/npm: lint"
+                "${workspaceFolder}/**/*.js"
+            ]
         },
         {
             "name": "Extension Tests",

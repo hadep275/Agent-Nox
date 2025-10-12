@@ -239,27 +239,45 @@ class AIClient {
   }
 
   /**
-   * Send request to AI provider (placeholder)
+   * 🤖 Send request to AI provider - REAL IMPLEMENTATION
    */
-  async sendRequest(prompt, _options = {}) {
+  async sendRequest(prompt, options = {}) {
     if (!this.isInitialized) {
       throw new Error("AI Client not initialized");
     }
 
     const timer = this.performanceMonitor.startTimer("ai_request");
+    const provider = this.providers[this.currentProvider];
 
     try {
-      // TODO: Implement actual AI API calls in Phase 2
-      const response = {
-        content: `AI response placeholder for prompt: ${prompt.substring(
-          0,
-          50
-        )}...`,
-        provider: this.currentProvider,
-        model: "placeholder-model",
-        tokens: 100,
-        cost: 0.001,
-      };
+      this.logger.info(`🤖 Sending request to ${provider.name}...`);
+
+      // Get API key
+      const apiKey = await this.getApiKey(this.currentProvider);
+      if (!apiKey) {
+        throw new Error(
+          `No API key configured for ${provider.name}. Please set up your API key first.`
+        );
+      }
+
+      // Route to appropriate provider
+      let response;
+      switch (this.currentProvider) {
+        case "anthropic":
+          response = await this.callAnthropicAPI(apiKey, prompt, options);
+          break;
+        case "openai":
+          response = await this.callOpenAIAPI(apiKey, prompt, options);
+          break;
+        case "deepseek":
+          response = await this.callDeepSeekAPI(apiKey, prompt, options);
+          break;
+        case "local":
+          response = await this.callLocalAPI(prompt, options);
+          break;
+        default:
+          throw new Error(`Unsupported provider: ${this.currentProvider}`);
+      }
 
       timer.end();
       this.performanceMonitor.recordCost(
@@ -269,12 +287,252 @@ class AIClient {
         response.cost
       );
 
+      this.logger.info(`🤖 Request completed in ${timer.duration}ms`);
       return response;
     } catch (error) {
       timer.end();
       this.logger.error("AI request failed:", error);
       throw error;
     }
+  }
+
+  /**
+   * 🤖 Call Anthropic Claude API
+   */
+  async callAnthropicAPI(apiKey, prompt, options = {}) {
+    try {
+      const model = options.model || this.providers.anthropic.defaultModel;
+      const maxTokens = options.maxTokens || 4000;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: model,
+          max_tokens: maxTokens,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+
+      return {
+        content: data.content[0].text,
+        provider: "anthropic",
+        model: model,
+        tokens: data.usage.input_tokens + data.usage.output_tokens,
+        cost: this.calculateAnthropicCost(data.usage, model),
+      };
+    } catch (error) {
+      this.logger.error("Anthropic API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🧠 Call OpenAI GPT API
+   */
+  async callOpenAIAPI(apiKey, prompt, options = {}) {
+    try {
+      const model = options.model || this.providers.openai.defaultModel;
+      const maxTokens = options.maxTokens || 4000;
+
+      const response = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+            max_tokens: maxTokens,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+
+      return {
+        content: data.choices[0].message.content,
+        provider: "openai",
+        model: model,
+        tokens: data.usage.total_tokens,
+        cost: this.calculateOpenAICost(data.usage, model),
+      };
+    } catch (error) {
+      this.logger.error("OpenAI API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * ⚡ Call DeepSeek API
+   */
+  async callDeepSeekAPI(apiKey, prompt, options = {}) {
+    try {
+      const model = options.model || this.providers.deepseek.defaultModel;
+      const maxTokens = options.maxTokens || 4000;
+
+      const response = await fetch(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+            max_tokens: maxTokens,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`DeepSeek API error: ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+
+      return {
+        content: data.choices[0].message.content,
+        provider: "deepseek",
+        model: model,
+        tokens: data.usage.total_tokens,
+        cost: this.calculateDeepSeekCost(data.usage, model),
+      };
+    } catch (error) {
+      this.logger.error("DeepSeek API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🏠 Call Local LLM API (Ollama/LM Studio)
+   */
+  async callLocalAPI(prompt, options = {}) {
+    try {
+      const model = options.model || "llama2";
+      const baseUrl = options.baseUrl || this.providers.local.baseUrl;
+
+      const response = await fetch(`${baseUrl}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          prompt: prompt,
+          stream: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Local LLM API error: ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+
+      return {
+        content: data.response,
+        provider: "local",
+        model: model,
+        tokens: 0, // Local models don't track tokens
+        cost: 0, // Local models are free
+      };
+    } catch (error) {
+      this.logger.error("Local LLM API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 💰 Calculate Anthropic API costs
+   */
+  calculateAnthropicCost(usage, model) {
+    // Anthropic pricing (as of 2024)
+    const pricing = {
+      "claude-3-sonnet-20240229": { input: 0.003, output: 0.015 }, // per 1K tokens
+      "claude-3-haiku-20240307": { input: 0.00025, output: 0.00125 },
+    };
+
+    const rates = pricing[model] || pricing["claude-3-sonnet-20240229"];
+    return (
+      (usage.input_tokens * rates.input + usage.output_tokens * rates.output) /
+      1000
+    );
+  }
+
+  /**
+   * 💰 Calculate OpenAI API costs
+   */
+  calculateOpenAICost(usage, model) {
+    // OpenAI pricing (as of 2024)
+    const pricing = {
+      "gpt-4": { input: 0.03, output: 0.06 }, // per 1K tokens
+      "gpt-4-turbo": { input: 0.01, output: 0.03 },
+      "gpt-3.5-turbo": { input: 0.0005, output: 0.0015 },
+    };
+
+    const rates = pricing[model] || pricing["gpt-4"];
+    return (
+      (usage.prompt_tokens * rates.input +
+        usage.completion_tokens * rates.output) /
+      1000
+    );
+  }
+
+  /**
+   * 💰 Calculate DeepSeek API costs
+   */
+  calculateDeepSeekCost(usage, model) {
+    // DeepSeek pricing (very competitive)
+    const pricing = {
+      "deepseek-chat": { input: 0.00014, output: 0.00028 }, // per 1K tokens
+      "deepseek-coder": { input: 0.00014, output: 0.00028 },
+    };
+
+    const rates = pricing[model] || pricing["deepseek-chat"];
+    return (
+      (usage.prompt_tokens * rates.input +
+        usage.completion_tokens * rates.output) /
+      1000
+    );
   }
 
   /**
