@@ -46,10 +46,19 @@ jobs:
           # Copy docs folder to _site for GitHub Pages
           mkdir -p _site
           cp -r docs/* _site/
-          
+
+          # Ensure proper file permissions and structure
+          find _site -name "*.html" -exec chmod 644 {} \;
+          find _site -name "*.css" -exec chmod 644 {} \;
+          find _site -name "*.js" -exec chmod 644 {} \;
+
           # Add build timestamp
           echo "<!-- Built on $(date) -->" >> _site/index.html
-          
+
+          # List files for debugging
+          echo "📁 Files in _site:"
+          ls -la _site/
+
           echo "✅ Nox landing page built successfully!"
 
       - name: 📤 Upload artifact
