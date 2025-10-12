@@ -75,6 +75,16 @@
         "command": "nox.apiKeys",
         "title": "🔑 Nox: Manage API Keys",
         "icon": "$(key)"
+      },
+      {
+        "command": "nox.clearChat",
+        "title": "Clear Chat History",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "nox.chatSettings",
+        "title": "Chat Settings",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -95,6 +105,18 @@
           "command": "nox.analyze",
           "when": "explorerResourceIsFolder",
           "group": "nox@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "nox.chatSettings",
+          "when": "view == noxChat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nox.clearChat",
+          "when": "view == noxChat",
+          "group": "navigation@2"
         }
       ],
       "commandPalette": [
@@ -121,10 +143,11 @@
       ]
     },
     "views": {
-      "explorer": [
+      "nox": [
         {
           "id": "noxChat",
-          "name": "🦊 Nox Chat",
+          "name": "",
+          "type": "webview",
           "when": "nox.activated"
         }
       ]
@@ -133,8 +156,8 @@
       "activitybar": [
         {
           "id": "nox",
-          "title": "🦊 Nox",
-          "icon": "$(heart)"
+          "title": "🦊Nox",
+          "icon": "$(robot)"
         }
       ]
     },
