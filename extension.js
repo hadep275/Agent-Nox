@@ -10,7 +10,7 @@ const RefactorCommand = require("./src/commands/refactorCommand");
 const AnalyzeCommand = require("./src/commands/analyzeCommand");
 const ApiKeyCommand = require("./src/commands/apiKeyCommand");
 const AuditLogger = require("./src/enterprise/auditLogger");
-const ChatPanel = require("./src/webview/chatPanel");
+const ChatPanel = require("./src/webview/chatPanel_simple");
 
 /**
  * 🦊 Nox - AI Coding Fox VS Code Extension
