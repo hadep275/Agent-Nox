@@ -85,6 +85,46 @@
         "command": "nox.chatSettings",
         "title": "Chat Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "nox.manageApiKeys",
+        "title": "🔑 Manage API Keys"
+      },
+      {
+        "command": "nox.switchProvider",
+        "title": "🤖 Switch AI Provider"
+      },
+      {
+        "command": "nox.openExtensionSettings",
+        "title": "⚙️ Extension Settings"
+      },
+      {
+        "command": "nox.showThemeSettings",
+        "title": "🎨 Theme Settings"
+      },
+      {
+        "command": "nox.showDebugLogs",
+        "title": "🔍 Debug & Logs"
+      },
+      {
+        "command": "nox.showHelp",
+        "title": "📖 Help & Documentation"
+      },
+      {
+        "command": "nox.resetExtension",
+        "title": "🔄 Reset Extension"
+      },
+      {
+        "command": "nox.openSettingsPanel",
+        "title": "Settings",
+        "icon": "$(gear)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "nox.settingsSubmenu",
+        "label": "Nox Settings",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -109,7 +149,7 @@
       ],
       "view/title": [
         {
-          "command": "nox.chatSettings",
+          "command": "nox.openSettingsPanel",
           "when": "view == noxChat",
           "group": "navigation@1"
         },
@@ -117,6 +157,28 @@
           "command": "nox.clearChat",
           "when": "view == noxChat",
           "group": "navigation@2"
+        }
+      ],
+      "nox.settingsSubmenu": [
+        {
+          "command": "nox.openSettingsPanel",
+          "group": "1_main@1"
+        },
+        {
+          "command": "nox.manageApiKeys",
+          "group": "2_keys@1"
+        },
+        {
+          "command": "nox.switchProvider",
+          "group": "2_keys@2"
+        },
+        {
+          "command": "nox.showHelp",
+          "group": "3_help@1"
+        },
+        {
+          "command": "nox.resetExtension",
+          "group": "4_reset@1"
         }
       ],
       "commandPalette": [

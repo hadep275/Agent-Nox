@@ -193,9 +193,26 @@ class NoxExtension {
           }
         }),
 
-        // Chat settings command (Quick Pick Menu)
-        vscode.commands.registerCommand("nox.chatSettings", async () => {
-          await this.showSettingsQuickPick();
+        // Settings panel command
+        vscode.commands.registerCommand("nox.openSettingsPanel", async () => {
+          await this.openSettingsPanel();
+        }),
+
+        // Individual settings commands (for submenu)
+        vscode.commands.registerCommand("nox.manageApiKeys", async () => {
+          await vscode.commands.executeCommand("nox.apiKeys");
+        }),
+
+        vscode.commands.registerCommand("nox.switchProvider", async () => {
+          await this.showProviderSwitcher();
+        }),
+
+        vscode.commands.registerCommand("nox.showHelp", async () => {
+          await this.showHelp();
+        }),
+
+        vscode.commands.registerCommand("nox.resetExtension", async () => {
+          await this.resetExtension();
         }),
       ];
 
@@ -245,120 +262,79 @@ class NoxExtension {
   }
 
   /**
-   * ⚙️ Show settings quick pick menu
+   * ⚙️ Open settings panel (like Augment)
    */
-  async showSettingsQuickPick() {
+  async openSettingsPanel() {
     try {
-      const settingsOptions = [
+      // Create settings panel
+      const panel = vscode.window.createWebviewPanel(
+        "noxSettings",
+        "🦊 Nox Settings",
+        vscode.ViewColumn.One,
         {
-          label: "🔑 Manage API Keys",
-          description: "Configure API keys for AI providers",
-          action: "apiKeys",
-        },
-        {
-          label: "🤖 Switch AI Provider",
-          description: "Change active provider (Anthropic, OpenAI, etc.)",
-          action: "switchProvider",
-        },
-        {
-          label: "⚙️ Extension Settings",
-          description: "Open VS Code settings for Nox",
-          action: "extensionSettings",
-        },
-        {
-          label: "📊 Performance Dashboard",
-          description: "View usage stats and metrics",
-          action: "dashboard",
-        },
-        {
-          label: "🎨 Theme Settings",
-          description: "Customize Aurora theme colors",
-          action: "themeSettings",
-        },
-        {
-          label: "🔍 Debug & Logs",
-          description: "View extension logs and diagnostics",
-          action: "debugLogs",
-        },
-        {
-          label: "📖 Help & Documentation",
-          description: "Open help and command reference",
-          action: "help",
-        },
-        {
-          label: "🔄 Reset Extension",
-          description: "Clear all data and reset to defaults",
-          action: "reset",
-        },
-      ];
-
-      const selectedOption = await vscode.window.showQuickPick(
-        settingsOptions,
-        {
-          placeHolder: "🦊 Nox Settings - Choose an option",
-          matchOnDescription: true,
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: [this.context.extensionUri],
         }
       );
 
-      if (selectedOption) {
-        await this.handleSettingsAction(selectedOption.action);
-      }
+      // Set the HTML content
+      panel.webview.html = this.getSettingsPanelContent();
+
+      // Handle messages from the settings panel
+      panel.webview.onDidReceiveMessage(async (message) => {
+        try {
+          switch (message.type) {
+            case "setApiKey":
+              await this.agentController.aiClient.setApiKey(
+                message.provider,
+                message.apiKey
+              );
+              panel.webview.postMessage({
+                type: "apiKeySet",
+                provider: message.provider,
+              });
+              break;
+            case "switchProvider":
+              await this.agentController.aiClient.setCurrentProvider(
+                message.provider
+              );
+              panel.webview.postMessage({
+                type: "providerSwitched",
+                provider: message.provider,
+              });
+              break;
+            case "getProviderStatus":
+              await this.sendProviderStatus(panel.webview);
+              break;
+            case "openExternal":
+              vscode.env.openExternal(vscode.Uri.parse(message.url));
+              break;
+            case "openKeybindings":
+              await vscode.commands.executeCommand(
+                "workbench.action.openGlobalKeybindings",
+                "nox"
+              );
+              break;
+            case "resetExtension":
+              await this.resetExtension();
+              break;
+            default:
+              this.logger.warn(
+                `Unknown settings message type: ${message.type}`
+              );
+          }
+        } catch (error) {
+          this.logger.error("Error handling settings message:", error);
+          panel.webview.postMessage({ type: "error", message: error.message });
+        }
+      });
+
+      this.logger.info("🦊 Settings panel opened");
     } catch (error) {
-      this.logger.error("Error showing settings quick pick:", error);
-      vscode.window.showErrorMessage(`Settings error: ${error.message}`);
-    }
-  }
-
-  /**
-   * 🎯 Handle settings action selection
-   */
-  async handleSettingsAction(action) {
-    try {
-      switch (action) {
-        case "apiKeys":
-          await vscode.commands.executeCommand("nox.apiKeys");
-          break;
-
-        case "switchProvider":
-          await this.showProviderSwitcher();
-          break;
-
-        case "extensionSettings":
-          await vscode.commands.executeCommand(
-            "workbench.action.openSettings",
-            "nox"
-          );
-          break;
-
-        case "dashboard":
-          await vscode.commands.executeCommand("nox.dashboard");
-          break;
-
-        case "themeSettings":
-          await this.showThemeSettings();
-          break;
-
-        case "debugLogs":
-          await this.showDebugLogs();
-          break;
-
-        case "help":
-          await this.showHelp();
-          break;
-
-        case "reset":
-          await this.resetExtension();
-          break;
-
-        default:
-          vscode.window.showWarningMessage(
-            `Unknown settings action: ${action}`
-          );
-      }
-    } catch (error) {
-      this.logger.error(`Error handling settings action ${action}:`, error);
+      this.logger.error("Error opening settings panel:", error);
       vscode.window.showErrorMessage(
-        `Failed to execute ${action}: ${error.message}`
+        `Failed to open settings: ${error.message}`
       );
     }
   }
@@ -404,6 +380,455 @@ class NoxExtension {
     } catch (error) {
       this.logger.error("Failed to set up event listeners:", error);
     }
+  }
+
+  /**
+   * 📄 Get settings panel HTML content
+   */
+  getSettingsPanelContent() {
+    const nonce = this.getNonce();
+
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+        <title>🦊 Nox Settings</title>
+        <style>
+            body {
+                font-family: var(--vscode-font-family);
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+                color: var(--vscode-foreground);
+                margin: 0;
+                padding: 20px;
+                min-height: 100vh;
+            }
+
+            .settings-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                display: grid;
+                grid-template-columns: 250px 1fr;
+                gap: 30px;
+                height: calc(100vh - 40px);
+            }
+
+            .settings-sidebar {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 12px;
+                padding: 20px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .settings-content {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 12px;
+                padding: 30px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                overflow-y: auto;
+            }
+
+            .settings-nav {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+
+            .settings-nav li {
+                margin-bottom: 8px;
+            }
+
+            .settings-nav button {
+                width: 100%;
+                background: transparent;
+                border: none;
+                color: var(--vscode-foreground);
+                padding: 12px 16px;
+                text-align: left;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                font-size: 14px;
+            }
+
+            .settings-nav button:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+
+            .settings-nav button.active {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+            }
+
+            .section {
+                display: none;
+            }
+
+            .section.active {
+                display: block;
+            }
+
+            .section h2 {
+                margin-top: 0;
+                color: #64b5f6;
+                font-size: 24px;
+                margin-bottom: 20px;
+            }
+
+            .provider-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+            }
+
+            .provider-card {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 12px;
+                padding: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                transition: all 0.3s ease;
+            }
+
+            .provider-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            }
+
+            .provider-card h3 {
+                margin-top: 0;
+                color: #81c784;
+                font-size: 18px;
+            }
+
+            .api-key-input {
+                width: 100%;
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                padding: 10px;
+                color: var(--vscode-foreground);
+                margin-top: 10px;
+                font-family: var(--vscode-editor-font-family);
+            }
+
+            .status-indicator {
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+                margin-top: 8px;
+            }
+
+            .status-configured {
+                background: #4caf50;
+                color: white;
+            }
+
+            .status-missing {
+                background: #f44336;
+                color: white;
+            }
+
+            .btn {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                margin-top: 10px;
+                transition: all 0.2s ease;
+            }
+
+            .btn:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="settings-container">
+            <div class="settings-sidebar">
+                <h2>🦊 Nox Settings</h2>
+                <ul class="settings-nav">
+                    <li><button class="nav-btn active" data-section="api-keys">🔑 API Keys</button></li>
+                    <li><button class="nav-btn" data-section="providers">🤖 AI Providers</button></li>
+                    <li><button class="nav-btn" data-section="theme">🎨 Theme</button></li>
+                    <li><button class="nav-btn" data-section="performance">📊 Performance</button></li>
+                    <li><button class="nav-btn" data-section="help">📖 Help & Documentation</button></li>
+                    <li><button class="nav-btn" data-section="account">👤 Account</button></li>
+                    <li><button class="nav-btn" data-section="reset">🔄 Reset Extension</button></li>
+                    <li><button class="nav-btn" data-section="about">ℹ️ About</button></li>
+                </ul>
+            </div>
+
+            <div class="settings-content">
+                <div id="api-keys" class="section active">
+                    <h2>🔑 API Keys</h2>
+                    <p>Configure your AI provider API keys securely.</p>
+                    <div class="provider-grid" id="apiKeysGrid">
+                        <!-- API key cards will be populated here -->
+                    </div>
+                </div>
+
+                <div id="providers" class="section">
+                    <h2>🤖 AI Providers</h2>
+                    <p>Switch between different AI providers and models.</p>
+                    <div class="provider-grid" id="providersGrid">
+                        <!-- Provider cards will be populated here -->
+                    </div>
+                </div>
+
+                <div id="theme" class="section">
+                    <h2>🎨 Aurora Theme</h2>
+                    <p>Customize your Nox experience with beautiful Aurora themes.</p>
+                    <div class="provider-grid">
+                        <div class="provider-card">
+                            <h3>🌌 Classic Aurora</h3>
+                            <p>Default blue-purple aurora theme</p>
+                            <button class="btn">Apply Theme</button>
+                        </div>
+                        <div class="provider-card">
+                            <h3>🔥 Fire Aurora</h3>
+                            <p>Warm orange-red aurora theme</p>
+                            <button class="btn">Apply Theme</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="performance" class="section">
+                    <h2>📊 Performance Dashboard</h2>
+                    <p>Monitor your Nox usage and performance metrics.</p>
+                    <div class="provider-card">
+                        <h3>📈 Usage Statistics</h3>
+                        <p>Coming soon - detailed analytics and performance metrics</p>
+                    </div>
+                </div>
+
+                <div id="help" class="section">
+                    <h2>📖 Help & Documentation</h2>
+                    <div class="provider-grid">
+                        <div class="provider-card">
+                            <h3>📚 User Guide</h3>
+                            <p>Complete guide to using Nox effectively</p>
+                            <button class="btn">Open User Guide</button>
+                        </div>
+                        <div class="provider-card">
+                            <h3>⌨️ Keyboard Shortcuts</h3>
+                            <p>List of all Nox commands and shortcuts</p>
+                            <button class="btn" onclick="openKeybindings()">View Shortcuts</button>
+                        </div>
+                        <div class="provider-card">
+                            <h3>🌐 Online Documentation</h3>
+                            <p>Visit our comprehensive documentation website</p>
+                            <button class="btn" onclick="openExternal('https://hadep275.github.io/Agent-Nox/')">Open Docs</button>
+                        </div>
+                        <div class="provider-card">
+                            <h3>🐛 Report Issue</h3>
+                            <p>Found a bug or have a feature request?</p>
+                            <button class="btn" onclick="openExternal('https://github.com/hadep275/Agent-Nox/issues')">Report Issue</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="account" class="section">
+                    <h2>👤 Account & Preferences</h2>
+                    <div class="provider-grid">
+                        <div class="provider-card">
+                            <h3>👤 User Profile</h3>
+                            <p>Manage your Nox user preferences and profile</p>
+                            <input type="text" class="api-key-input" placeholder="Display Name" value="Developer">
+                            <button class="btn">Save Profile</button>
+                        </div>
+                        <div class="provider-card">
+                            <h3>🔔 Notifications</h3>
+                            <p>Configure notification preferences</p>
+                            <label><input type="checkbox" checked> Enable completion notifications</label><br>
+                            <label><input type="checkbox" checked> Enable error notifications</label><br>
+                            <label><input type="checkbox"> Enable usage analytics</label>
+                        </div>
+                        <div class="provider-card">
+                            <h3>💾 Data & Privacy</h3>
+                            <p>Manage your data and privacy settings</p>
+                            <button class="btn">Export Chat History</button>
+                            <button class="btn">Privacy Settings</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="reset" class="section">
+                    <h2>🔄 Reset Extension</h2>
+                    <div class="provider-card">
+                        <h3>⚠️ Reset Nox Extension</h3>
+                        <p>This will clear all data including chat history, API keys, settings, and cached data.</p>
+                        <p><strong>This action cannot be undone!</strong></p>
+                        <div style="margin-top: 20px;">
+                            <h4>What will be reset:</h4>
+                            <ul>
+                                <li>• All chat conversations and history</li>
+                                <li>• Stored API keys (securely deleted)</li>
+                                <li>• Extension settings and preferences</li>
+                                <li>• Cached data and performance metrics</li>
+                                <li>• User profile and account data</li>
+                            </ul>
+                        </div>
+                        <button class="btn" style="background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);" onclick="resetExtension()">
+                            🔄 Reset Everything
+                        </button>
+                    </div>
+                </div>
+
+                <div id="about" class="section">
+                    <h2>ℹ️ About Nox</h2>
+                    <div class="provider-grid">
+                        <div class="provider-card">
+                            <h3>🦊 Nox v0.1.0</h3>
+                            <p>Your clever AI coding fox</p>
+                            <p>Built with ❤️ for enterprise-scale development</p>
+                            <button class="btn" onclick="openExternal('https://github.com/hadep275/Agent-Nox')">GitHub Repository</button>
+                        </div>
+                        <div class="provider-card">
+                            <h3>🏢 Enterprise Features</h3>
+                            <p>Designed for large-scale codebases (100K+ files)</p>
+                            <ul>
+                                <li>• Multi-AI provider support</li>
+                                <li>• Performance monitoring</li>
+                                <li>• Audit trails & logging</li>
+                                <li>• ROI tracking</li>
+                            </ul>
+                        </div>
+                        <div class="provider-card">
+                            <h3>🎨 Aurora Theme</h3>
+                            <p>Beautiful Northern Lights inspired interface</p>
+                            <p>Crafted for long coding sessions with eye-friendly gradients</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script nonce="${nonce}">
+            const vscode = acquireVsCodeApi();
+
+            // Navigation
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const section = btn.dataset.section;
+
+                    // Update nav
+                    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    // Update content
+                    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+                    document.getElementById(section).classList.add('active');
+                });
+            });
+
+            // Initialize
+            window.addEventListener('load', () => {
+                vscode.postMessage({ type: 'getProviderStatus' });
+                populateApiKeys();
+            });
+
+            function populateApiKeys() {
+                const providers = [
+                    { id: 'anthropic', name: '🤖 Anthropic Claude', placeholder: 'sk-ant-api03-...' },
+                    { id: 'openai', name: '🧠 OpenAI GPT-4', placeholder: 'sk-...' },
+                    { id: 'deepseek', name: '🔍 DeepSeek', placeholder: 'sk-...' },
+                    { id: 'local', name: '🏠 Local LLM', placeholder: 'http://localhost:11434' }
+                ];
+
+                const grid = document.getElementById('apiKeysGrid');
+                grid.innerHTML = providers.map(provider => \`
+                    <div class="provider-card">
+                        <h3>\${provider.name}</h3>
+                        <input type="password" class="api-key-input"
+                               placeholder="\${provider.placeholder}"
+                               data-provider="\${provider.id}">
+                        <div class="status-indicator status-missing" id="status-\${provider.id}">Not Configured</div>
+                        <button class="btn" onclick="setApiKey('\${provider.id}')">Save Key</button>
+                    </div>
+                \`).join('');
+            }
+
+            function setApiKey(provider) {
+                const input = document.querySelector(\`[data-provider="\${provider}"]\`);
+                const apiKey = input.value.trim();
+
+                if (apiKey) {
+                    vscode.postMessage({ type: 'setApiKey', provider, apiKey });
+                }
+            }
+
+            function openExternal(url) {
+                vscode.postMessage({ type: 'openExternal', url });
+            }
+
+            function openKeybindings() {
+                vscode.postMessage({ type: 'openKeybindings' });
+            }
+
+            function resetExtension() {
+                if (confirm('⚠️ Are you sure you want to reset Nox Extension?\\n\\nThis will permanently delete:\\n• All chat history\\n• API keys\\n• Settings\\n• Cached data\\n\\nThis cannot be undone!')) {
+                    vscode.postMessage({ type: 'resetExtension' });
+                }
+            }
+
+            // Handle messages from extension
+            window.addEventListener('message', event => {
+                const message = event.data;
+
+                switch (message.type) {
+                    case 'apiKeySet':
+                        const status = document.getElementById(\`status-\${message.provider}\`);
+                        status.textContent = 'Configured';
+                        status.className = 'status-indicator status-configured';
+                        break;
+                }
+            });
+        </script>
+    </body>
+    </html>`;
+  }
+
+  /**
+   * 📊 Send provider status to settings panel
+   */
+  async sendProviderStatus(webview) {
+    try {
+      const providers = ["anthropic", "openai", "deepseek", "local"];
+      const status = {};
+
+      for (const provider of providers) {
+        status[provider] = await this.agentController.aiClient.hasValidApiKey(
+          provider
+        );
+      }
+
+      webview.postMessage({ type: "providerStatus", status });
+    } catch (error) {
+      this.logger.error("Error sending provider status:", error);
+    }
+  }
+
+  /**
+   * 🔐 Generate nonce for CSP
+   */
+  getNonce() {
+    let text = "";
+    const possible =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (let i = 0; i < 32; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
   }
 
   /**
