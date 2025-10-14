@@ -66,6 +66,18 @@ class NoxChatViewProvider {
               await vscode.commands.executeCommand("nox.settings");
               break;
 
+            case "changeProvider":
+              await this.handleProviderChange(message.provider);
+              break;
+
+            case "changeModel":
+              await this.handleModelChange(message.model);
+              break;
+
+            case "getProviderStatus":
+              await this.sendProviderStatus();
+              break;
+
             default:
               this.logger.warn(`Unknown message type: ${message.type}`);
           }
@@ -139,8 +151,10 @@ class NoxChatViewProvider {
         type: "assistant",
         content: aiResponse.content,
         timestamp: new Date().toISOString(),
-        tokens: aiResponse.usage?.total_tokens || 0,
-        provider: this.agentController.aiClient.getCurrentProvider(),
+        tokens: aiResponse.tokens || 0,
+        cost: aiResponse.cost || 0,
+        provider: aiResponse.provider || "unknown",
+        model: aiResponse.model || "unknown",
       };
 
       this.chatHistory.push(aiMessageObj);
@@ -198,6 +212,88 @@ class NoxChatViewProvider {
     await this.saveChatHistory();
     this.sendMessageToWebview({ type: "clearMessages" });
     this.logger.info("🦊 Chat history cleared");
+  }
+
+  /**
+   * 🔄 Handle provider change
+   */
+  async handleProviderChange(provider) {
+    try {
+      if (!this.agentController?.aiClient) {
+        throw new Error("AI Client not available");
+      }
+
+      // Update current provider
+      await this.agentController.aiClient.setCurrentProvider(provider);
+
+      // Send updated provider info to webview
+      await this.sendProviderStatus();
+
+      this.logger.info(`🦊 Provider changed to: ${provider}`);
+    } catch (error) {
+      this.logger.error("Failed to change provider:", error);
+      this.sendErrorToWebview(`Failed to change provider: ${error.message}`);
+    }
+  }
+
+  /**
+   * 🔄 Handle model change
+   */
+  async handleModelChange(model) {
+    try {
+      if (!this.agentController?.aiClient) {
+        throw new Error("AI Client not available");
+      }
+
+      // Update current model (we'll need to add this method to aiClient)
+      await this.agentController.aiClient.setCurrentModel(model);
+
+      // Send updated provider info to webview
+      await this.sendProviderStatus();
+
+      this.logger.info(`🦊 Model changed to: ${model}`);
+    } catch (error) {
+      this.logger.error("Failed to change model:", error);
+      this.sendErrorToWebview(`Failed to change model: ${error.message}`);
+    }
+  }
+
+  /**
+   * 📊 Send provider status to webview
+   */
+  async sendProviderStatus() {
+    try {
+      if (!this.agentController?.aiClient) {
+        return;
+      }
+
+      const currentProvider =
+        this.agentController.aiClient.getCurrentProvider();
+      const providers = this.agentController.aiClient.getProviders();
+      const currentModel = this.agentController.aiClient.getCurrentModel();
+
+      // Get API key status for each provider
+      const providerStatus = {};
+      for (const [providerId, provider] of Object.entries(providers)) {
+        const hasApiKey = await this.agentController.aiClient.getApiKey(
+          providerId
+        );
+        providerStatus[providerId] = {
+          ...provider,
+          hasApiKey: !!hasApiKey,
+          isActive: providerId === currentProvider,
+        };
+      }
+
+      this.sendMessageToWebview({
+        type: "providerStatus",
+        currentProvider,
+        currentModel,
+        providers: providerStatus,
+      });
+    } catch (error) {
+      this.logger.error("Failed to send provider status:", error);
+    }
   }
 
   /**
@@ -298,6 +394,40 @@ class NoxChatViewProvider {
         <div class="aurora-bg"></div>
         <div class="chat-container">
 
+            <!-- Provider & Model Selection -->
+            <div class="provider-controls">
+                <div class="provider-selector">
+                    <label for="providerSelect">🤖 Provider:</label>
+                    <select id="providerSelect" class="provider-dropdown">
+                        <option value="anthropic">🤖 Anthropic Claude</option>
+                        <option value="openai">🧠 OpenAI GPT</option>
+                        <option value="deepseek">⚡ DeepSeek</option>
+                        <option value="local">🏠 Local LLM</option>
+                    </select>
+                    <div class="provider-status" id="providerStatus">
+                        <span class="status-indicator" id="statusIndicator">●</span>
+                        <span class="status-text" id="statusText">Ready</span>
+                    </div>
+                </div>
+
+                <div class="model-selector">
+                    <label for="modelSelect">🧠 Model:</label>
+                    <select id="modelSelect" class="model-dropdown">
+                        <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                    </select>
+                </div>
+
+                <div class="cost-tracker" id="costTracker">
+                    <div class="cost-info">
+                        <span class="cost-label">Session:</span>
+                        <span class="cost-value" id="sessionCost">$0.00</span>
+                    </div>
+                    <div class="token-info">
+                        <span class="token-label">Tokens:</span>
+                        <span class="token-value" id="sessionTokens">0</span>
+                    </div>
+                </div>
+            </div>
 
             <!-- Messages Container -->
             <div class="messages-container" id="messagesContainer">
@@ -424,7 +554,91 @@ class NoxChatViewProvider {
         position: relative;
       }
 
+      /* Provider Controls */
+      .provider-controls {
+        background: rgba(15, 23, 42, 0.95);
+        border-bottom: 1px solid var(--aurora-blue);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        backdrop-filter: blur(10px);
+      }
 
+      .provider-selector, .model-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+      }
+
+      .provider-selector label, .model-selector label {
+        color: var(--aurora-blue);
+        font-weight: 600;
+        min-width: 60px;
+      }
+
+      .provider-dropdown, .model-dropdown {
+        flex: 1;
+        background: rgba(30, 41, 59, 0.8);
+        border: 1px solid var(--aurora-blue);
+        border-radius: 6px;
+        color: var(--text-primary);
+        padding: 4px 8px;
+        font-size: 11px;
+        outline: none;
+        transition: all 0.2s ease;
+      }
+
+      .provider-dropdown:focus, .model-dropdown:focus {
+        border-color: var(--aurora-purple);
+        box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+      }
+
+      .provider-status {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10px;
+      }
+
+      .status-indicator {
+        font-size: 8px;
+        color: var(--aurora-green);
+      }
+
+      .status-indicator.error {
+        color: #ef4444;
+      }
+
+      .status-indicator.warning {
+        color: #f59e0b;
+      }
+
+      .status-text {
+        color: var(--text-secondary);
+      }
+
+      .cost-tracker {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 10px;
+        color: var(--text-secondary);
+        padding-top: 4px;
+        border-top: 1px solid rgba(139, 92, 246, 0.2);
+      }
+
+      .cost-info, .token-info {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .cost-value, .token-value {
+        color: var(--aurora-blue);
+        font-weight: 600;
+      }
 
       /* Messages Container */
       .messages-container {
@@ -701,6 +915,7 @@ class NoxChatViewProvider {
 
           // Request initial data
           this.sendMessage({ type: 'ready' });
+          this.sendMessage({ type: 'getProviderStatus' });
 
           console.log('🦊 Nox Chat Sidebar initialized');
         }
@@ -710,6 +925,19 @@ class NoxChatViewProvider {
           this.sendBtn = document.getElementById('sendBtn');
           this.messagesContainer = document.getElementById('messagesContainer');
           this.thinkingIndicator = document.getElementById('thinkingIndicator');
+
+          // Provider and model controls
+          this.providerSelect = document.getElementById('providerSelect');
+          this.modelSelect = document.getElementById('modelSelect');
+          this.providerStatus = document.getElementById('providerStatus');
+          this.statusIndicator = document.getElementById('statusIndicator');
+          this.statusText = document.getElementById('statusText');
+          this.sessionCost = document.getElementById('sessionCost');
+          this.sessionTokens = document.getElementById('sessionTokens');
+
+          // Initialize session tracking
+          this.totalCost = 0;
+          this.totalTokens = 0;
         }
 
         setupEventListeners() {
@@ -721,6 +949,16 @@ class NoxChatViewProvider {
           // Auto-resize textarea
           this.messageInput.addEventListener('input', () => {
             this.autoResizeTextarea();
+          });
+
+          // Provider change
+          this.providerSelect.addEventListener('change', () => {
+            this.handleProviderChange();
+          });
+
+          // Model change
+          this.modelSelect.addEventListener('change', () => {
+            this.handleModelChange();
           });
 
           // Handle messages from extension
@@ -761,11 +999,6 @@ class NoxChatViewProvider {
               this.addMessage(message.message);
               break;
 
-            case 'aiMessage':
-              this.addMessage(message.message);
-              this.isAIResponding = false;
-              break;
-
             case 'aiThinking':
               this.showThinking(message.thinking);
               this.isAIResponding = message.thinking;
@@ -786,6 +1019,19 @@ class NoxChatViewProvider {
 
             case 'providerInfo':
               this.updateProviderInfo(message.provider);
+              break;
+
+            case 'providerStatus':
+              this.updateProviderStatus(message);
+              break;
+
+            case 'aiMessage':
+              this.addMessage(message.message);
+              // Update session costs if provided
+              if (message.message.tokens || message.message.cost) {
+                this.updateSessionCosts(message.message.tokens, message.message.cost);
+              }
+              this.isAIResponding = false;
               break;
 
             default:
@@ -810,7 +1056,9 @@ class NoxChatViewProvider {
           });
 
           if (messageObj.type === 'assistant') {
-            metaEl.textContent = \`\${time} • \${messageObj.tokens || 0} tokens • \${messageObj.provider || 'AI'}\`;
+            const cost = messageObj.cost ? \` • $\${messageObj.cost.toFixed(4)}\` : '';
+            const model = messageObj.model ? \` • \${messageObj.model}\` : '';
+            metaEl.textContent = \`\${time} • \${messageObj.tokens || 0} tokens\${cost} • \${messageObj.provider || 'AI'}\${model}\`;
           } else {
             metaEl.textContent = time;
           }
@@ -862,6 +1110,93 @@ class NoxChatViewProvider {
           history.forEach(msg => {
             this.addMessage(msg);
           });
+        }
+
+        handleProviderChange() {
+          const selectedProvider = this.providerSelect.value;
+          console.log('🔄 Provider changed to:', selectedProvider);
+
+          // Send provider change to extension
+          this.sendMessage({
+            type: 'changeProvider',
+            provider: selectedProvider
+          });
+
+          // Request updated provider status
+          this.sendMessage({ type: 'getProviderStatus' });
+        }
+
+        handleModelChange() {
+          const selectedModel = this.modelSelect.value;
+          console.log('🔄 Model changed to:', selectedModel);
+
+          // Send model change to extension
+          this.sendMessage({
+            type: 'changeModel',
+            model: selectedModel
+          });
+        }
+
+        updateProviderStatus(data) {
+          console.log('📊 Updating provider status:', data);
+
+          // Update provider dropdown
+          this.providerSelect.value = data.currentProvider;
+
+          // Update model dropdown with current provider's models
+          this.updateModelDropdown(data.providers[data.currentProvider], data.currentModel);
+
+          // Update status indicator
+          const provider = data.providers[data.currentProvider];
+          if (provider.hasApiKey) {
+            this.statusIndicator.className = 'status-indicator';
+            this.statusText.textContent = 'Ready';
+          } else {
+            this.statusIndicator.className = 'status-indicator error';
+            this.statusText.textContent = 'No API Key';
+          }
+        }
+
+        updateModelDropdown(provider, currentModel) {
+          // Clear existing options
+          this.modelSelect.innerHTML = '';
+
+          // Add model options
+          provider.models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = this.getModelDisplayName(model);
+            if (model === currentModel) {
+              option.selected = true;
+            }
+            this.modelSelect.appendChild(option);
+          });
+        }
+
+        getModelDisplayName(model) {
+          // Convert model IDs to friendly names
+          const modelNames = {
+            'claude-sonnet-4-5-20250929': 'Claude Sonnet 4.5',
+            'claude-sonnet-4-20250514': 'Claude Sonnet 4',
+            'claude-3-5-haiku-20241022': 'Claude Haiku 3.5',
+            'claude-3-haiku-20240307': 'Claude Haiku 3',
+            'gpt-4': 'GPT-4',
+            'gpt-4-turbo': 'GPT-4 Turbo',
+            'gpt-3.5-turbo': 'GPT-3.5 Turbo',
+            'deepseek-chat': 'DeepSeek Chat',
+            'deepseek-coder': 'DeepSeek Coder',
+            'ollama': 'Ollama',
+            'lm-studio': 'LM Studio'
+          };
+          return modelNames[model] || model;
+        }
+
+        updateSessionCosts(tokens, cost) {
+          this.totalTokens += tokens || 0;
+          this.totalCost += cost || 0;
+
+          this.sessionTokens.textContent = this.totalTokens.toLocaleString();
+          this.sessionCost.textContent = '$' + this.totalCost.toFixed(4);
         }
 
         updateProviderInfo(provider) {

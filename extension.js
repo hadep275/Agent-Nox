@@ -286,19 +286,41 @@ class NoxExtension {
         try {
           switch (message.type) {
             case "setApiKey":
-              await this.agentController.aiClient.setApiKey(
-                message.provider,
-                message.apiKey
-              );
-              panel.webview.postMessage({
-                type: "apiKeySet",
-                provider: message.provider,
-              });
+              try {
+                await this.agentController.aiClient.setApiKey(
+                  message.provider,
+                  message.apiKey
+                );
+
+                // Verify the key was saved by trying to retrieve it
+                const savedKey = await this.agentController.aiClient.getApiKey(
+                  message.provider
+                );
+                if (savedKey) {
+                  panel.webview.postMessage({
+                    type: "apiKeySet",
+                    provider: message.provider,
+                  });
+                  this.logger.info(
+                    `✅ API key successfully saved for ${message.provider}`
+                  );
+                } else {
+                  throw new Error("API key was not saved properly");
+                }
+              } catch (error) {
+                this.logger.error(
+                  `❌ Failed to save API key for ${message.provider}:`,
+                  error
+                );
+                panel.webview.postMessage({
+                  type: "error",
+                  message: `Failed to save ${message.provider} API key: ${error.message}`,
+                  provider: message.provider,
+                });
+              }
               break;
             case "switchProvider":
-              await this.agentController.aiClient.setCurrentProvider(
-                message.provider
-              );
+              await this.agentController.aiClient.setProvider(message.provider);
               panel.webview.postMessage({
                 type: "providerSwitched",
                 provider: message.provider,
@@ -504,15 +526,48 @@ class NoxExtension {
                 font-size: 18px;
             }
 
+            .input-container {
+                position: relative;
+                margin-top: 10px;
+            }
+
             .api-key-input {
                 width: 100%;
                 background: rgba(255, 255, 255, 0.1);
                 border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 6px;
-                padding: 10px;
+                padding: 10px 40px 10px 10px;
                 color: var(--vscode-foreground);
-                margin-top: 10px;
-                font-family: var(--vscode-editor-font-family);
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+                box-sizing: border-box;
+            }
+
+            .api-key-input:focus {
+                outline: none;
+                border-color: #667eea;
+                box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+            }
+
+            .toggle-btn {
+                position: absolute;
+                right: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: none;
+                border: none;
+                color: var(--vscode-foreground);
+                cursor: pointer;
+                padding: 4px;
+                border-radius: 4px;
+                font-size: 16px;
+                opacity: 0.7;
+                transition: all 0.2s ease;
+            }
+
+            .toggle-btn:hover {
+                opacity: 1;
+                background: rgba(255, 255, 255, 0.1);
             }
 
             .status-indicator {
@@ -534,6 +589,16 @@ class NoxExtension {
                 color: white;
             }
 
+            .status-error {
+                background: #ff5722;
+                color: white;
+            }
+
+            .status-saving {
+                background: #ff9800;
+                color: white;
+            }
+
             .btn {
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
@@ -549,6 +614,13 @@ class NoxExtension {
             .btn:hover {
                 transform: translateY(-1px);
                 box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            }
+
+            .help-text {
+                font-size: 12px;
+                color: var(--vscode-descriptionForeground);
+                margin-top: 8px;
+                opacity: 0.8;
             }
         </style>
     </head>
@@ -739,32 +811,171 @@ class NoxExtension {
 
             function populateApiKeys() {
                 const providers = [
-                    { id: 'anthropic', name: '🤖 Anthropic Claude', placeholder: 'sk-ant-api03-...' },
-                    { id: 'openai', name: '🧠 OpenAI GPT-4', placeholder: 'sk-...' },
-                    { id: 'deepseek', name: '🔍 DeepSeek', placeholder: 'sk-...' },
-                    { id: 'local', name: '🏠 Local LLM', placeholder: 'http://localhost:11434' }
+                    { id: 'anthropic', name: '🤖 Anthropic Claude', placeholder: 'sk-ant-api03-...', help: 'Get your key from: https://console.anthropic.com/' },
+                    { id: 'openai', name: '🧠 OpenAI GPT-4', placeholder: 'sk-...', help: 'Get your key from: https://platform.openai.com/api-keys' },
+                    { id: 'deepseek', name: '🔍 DeepSeek', placeholder: 'sk-...', help: 'Get your key from: https://platform.deepseek.com/' },
+                    { id: 'local', name: '🏠 Local LLM', placeholder: 'http://localhost:11434', help: 'No API key needed for local models' }
                 ];
 
                 const grid = document.getElementById('apiKeysGrid');
-                grid.innerHTML = providers.map(provider => \`
-                    <div class="provider-card">
-                        <h3>\${provider.name}</h3>
-                        <input type="password" class="api-key-input"
-                               placeholder="\${provider.placeholder}"
-                               data-provider="\${provider.id}">
-                        <div class="status-indicator status-missing" id="status-\${provider.id}">Not Configured</div>
-                        <button class="btn" onclick="setApiKey('\${provider.id}')">Save Key</button>
-                    </div>
-                \`).join('');
+
+                // Create HTML for each provider
+                let html = '';
+                providers.forEach(provider => {
+                    html += '<div class="provider-card">';
+                    html += '<h3>' + provider.name + '</h3>';
+                    html += '<div class="input-container">';
+                    html += '<input type="password" class="api-key-input"';
+                    html += ' placeholder="' + provider.placeholder + '"';
+                    html += ' data-provider="' + provider.id + '"';
+                    html += ' id="input-' + provider.id + '">';
+                    html += '<button class="toggle-btn" data-provider="' + provider.id + '"';
+                    html += ' id="toggle-' + provider.id + '" title="Show/Hide API Key">👁️</button>';
+                    html += '</div>';
+                    html += '<div class="status-indicator status-missing" id="status-' + provider.id + '">Not Configured</div>';
+                    html += '<button class="btn" data-provider="' + provider.id + '" id="save-' + provider.id + '" style="margin-left: 10px;">Save Key</button>';
+                    html += '<div class="help-text">' + provider.help + '</div>';
+                    html += '</div>';
+                });
+
+                grid.innerHTML = html;
+
+                // Add event listeners after creating the HTML
+                setupEventListeners();
+
+                // Request current API key status from extension
+                vscode.postMessage({ type: 'getProviderStatus' });
+            }
+
+            function setupEventListeners() {
+                // Add event listeners for toggle buttons
+                document.querySelectorAll('.toggle-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const provider = this.getAttribute('data-provider');
+                        toggleVisibility(provider);
+                    });
+                });
+
+                // Add event listeners for save buttons
+                document.querySelectorAll('.btn[data-provider]').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const provider = this.getAttribute('data-provider');
+                        setApiKey(provider);
+                    });
+                });
+
+                // Add event listeners for input changes to detect when keys are cleared
+                document.querySelectorAll('.api-key-input').forEach(input => {
+                    input.addEventListener('input', function() {
+                        const provider = this.getAttribute('data-provider');
+                        const status = document.getElementById('status-' + provider);
+
+                        if (this.value.trim() === '') {
+                            // Key was cleared, update status
+                            status.textContent = 'Not Configured';
+                            status.className = 'status-indicator status-missing';
+                        }
+                    });
+                });
+            }
+
+            function toggleVisibility(provider) {
+                const input = document.getElementById('input-' + provider);
+                const toggleBtn = document.getElementById('toggle-' + provider);
+
+                if (input && toggleBtn) {
+                    if (input.type === 'password') {
+                        input.type = 'text';
+                        toggleBtn.textContent = '🙈';
+                        toggleBtn.title = 'Hide API Key';
+                    } else {
+                        input.type = 'password';
+                        toggleBtn.textContent = '👁️';
+                        toggleBtn.title = 'Show API Key';
+                    }
+                }
             }
 
             function setApiKey(provider) {
-                const input = document.querySelector(\`[data-provider="\${provider}"]\`);
+                const input = document.getElementById('input-' + provider);
+                const saveBtn = document.getElementById('save-' + provider);
+                const statusDiv = document.getElementById('status-' + provider);
+
+                if (!input || !saveBtn || !statusDiv) {
+                    return;
+                }
+
                 const apiKey = input.value.trim();
 
-                if (apiKey) {
-                    vscode.postMessage({ type: 'setApiKey', provider, apiKey });
+                // Validate API key format based on provider
+                const validation = validateApiKey(provider, apiKey);
+                if (!validation.valid) {
+                    statusDiv.textContent = validation.message;
+                    statusDiv.className = 'status-indicator status-error';
+                    setTimeout(() => {
+                        statusDiv.textContent = 'Not Configured';
+                        statusDiv.className = 'status-indicator status-missing';
+                    }, 3000);
+                    return;
                 }
+
+                // Update UI to show saving state
+                saveBtn.textContent = 'Saving...';
+                saveBtn.disabled = true;
+                statusDiv.textContent = 'Saving...';
+                statusDiv.className = 'status-indicator status-saving';
+
+                // Send message to extension
+                vscode.postMessage({ type: 'setApiKey', provider, apiKey });
+            }
+
+            function validateApiKey(provider, apiKey) {
+                if (!apiKey) {
+                    return { valid: false, message: 'API key cannot be empty' };
+                }
+
+                switch (provider) {
+                    case 'anthropic':
+                        if (!apiKey.startsWith('sk-ant-')) {
+                            return { valid: false, message: 'Anthropic keys start with sk-ant-' };
+                        }
+                        if (apiKey.length < 50) {
+                            return { valid: false, message: 'Anthropic key seems too short' };
+                        }
+                        break;
+
+                    case 'openai':
+                        if (!apiKey.startsWith('sk-')) {
+                            return { valid: false, message: 'OpenAI keys start with sk-' };
+                        }
+                        if (apiKey.length < 40) {
+                            return { valid: false, message: 'OpenAI key seems too short' };
+                        }
+                        break;
+
+                    case 'deepseek':
+                        if (!apiKey.startsWith('sk-')) {
+                            return { valid: false, message: 'DeepSeek keys start with sk-' };
+                        }
+                        if (apiKey.length < 30) {
+                            return { valid: false, message: 'DeepSeek key seems too short' };
+                        }
+                        break;
+
+                    case 'local':
+                        // For local, accept URLs or leave empty
+                        if (apiKey && !apiKey.startsWith('http')) {
+                            return { valid: false, message: 'Local endpoint should be a URL (http://...)' };
+                        }
+                        break;
+
+                    default:
+                        if (apiKey.length < 10) {
+                            return { valid: false, message: 'API key seems too short' };
+                        }
+                }
+
+                return { valid: true, message: 'Valid' };
             }
 
             function openExternal(url) {
@@ -787,9 +998,91 @@ class NoxExtension {
 
                 switch (message.type) {
                     case 'apiKeySet':
-                        const status = document.getElementById(\`status-\${message.provider}\`);
-                        status.textContent = 'Configured';
-                        status.className = 'status-indicator status-configured';
+                        const status = document.getElementById('status-' + message.provider);
+                        const saveBtn = document.getElementById('save-' + message.provider);
+                        const input = document.getElementById('input-' + message.provider);
+
+                        if (status && saveBtn && input) {
+                            // Show success message temporarily
+                            status.textContent = 'Saved Successfully! ✅';
+                            status.className = 'status-indicator status-configured';
+
+                            // Reset save button
+                            saveBtn.textContent = 'Saved!';
+                            saveBtn.disabled = false;
+
+                            // Clear the input for security
+                            input.value = '';
+                            input.type = 'password';
+
+                            // Reset toggle button
+                            const toggleBtn = document.getElementById('toggle-' + message.provider);
+                            if (toggleBtn) {
+                                toggleBtn.textContent = '👁️';
+                                toggleBtn.title = 'Show API Key';
+                            }
+
+                            // After 2 seconds, change to "Configured"
+                            setTimeout(() => {
+                                status.textContent = 'Configured ✅';
+                                saveBtn.textContent = 'Save Key';
+                            }, 2000);
+                        }
+                        break;
+
+                    case 'error':
+                        // Handle any errors from the extension
+                        console.error('Extension error:', message.message);
+
+                        // Update UI for the specific provider that had an error
+                        if (message.provider) {
+                            const saveBtn = document.getElementById('save-' + message.provider);
+                            const status = document.getElementById('status-' + message.provider);
+
+                            if (saveBtn) {
+                                saveBtn.textContent = 'Save Key';
+                                saveBtn.disabled = false;
+                            }
+
+                            if (status) {
+                                status.textContent = 'Error: ' + message.message;
+                                status.className = 'status-indicator status-error';
+
+                                // Clear error message after 5 seconds
+                                setTimeout(() => {
+                                    status.textContent = 'Not Configured';
+                                    status.className = 'status-indicator status-missing';
+                                }, 5000);
+                            }
+                        } else {
+                            // Fallback: try to find which provider had the error
+                            const allProviders = ['anthropic', 'openai', 'deepseek', 'local'];
+                            allProviders.forEach(provider => {
+                                const saveBtn = document.getElementById('save-' + provider);
+                                if (saveBtn && saveBtn.disabled) {
+                                    saveBtn.textContent = 'Save Key';
+                                    saveBtn.disabled = false;
+                                }
+                            });
+                        }
+                        break;
+
+                    case 'providerStatus':
+                        // Update status indicators based on current API key status
+                        if (message.status) {
+                            Object.keys(message.status).forEach(provider => {
+                                const status = document.getElementById('status-' + provider);
+                                if (status) {
+                                    if (message.status[provider]) {
+                                        status.textContent = 'Configured ✅';
+                                        status.className = 'status-indicator status-configured';
+                                    } else {
+                                        status.textContent = 'Not Configured';
+                                        status.className = 'status-indicator status-missing';
+                                    }
+                                }
+                            });
+                        }
                         break;
                 }
             });
@@ -873,9 +1166,7 @@ class NoxExtension {
       );
 
       if (selectedProvider && !selectedProvider.isCurrent) {
-        await this.agentController.aiClient.setCurrentProvider(
-          selectedProvider.id
-        );
+        await this.agentController.aiClient.setProvider(selectedProvider.id);
         vscode.window.showInformationMessage(
           `🤖 Switched to ${selectedProvider.label.replace(" (Current)", "")}`
         );

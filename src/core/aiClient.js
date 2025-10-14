@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const axios = require("axios");
 
 /**
  * 🦊 Nox AI Client - Multi-provider support with user-controlled API keys
@@ -11,12 +12,18 @@ class AIClient {
     this.performanceMonitor = performanceMonitor;
     this.isInitialized = false;
     this.currentProvider = "anthropic";
+    this.currentModel = null; // Will be set to default model of current provider
     this.providers = {
       anthropic: {
         name: "🤖 Anthropic Claude",
-        models: ["claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
+        models: [
+          "claude-sonnet-4-5-20250929",
+          "claude-sonnet-4-20250514",
+          "claude-3-5-haiku-20241022",
+          "claude-3-haiku-20240307",
+        ],
         baseUrl: "https://api.anthropic.com/v1",
-        defaultModel: "claude-3-sonnet-20240229",
+        defaultModel: "claude-sonnet-4-5-20250929",
       },
       openai: {
         name: "🧠 OpenAI GPT",
@@ -125,6 +132,9 @@ class AIClient {
       this.logger.info("🦊 Initializing Nox AI client...");
 
       this.currentProvider = configuration.get("aiProvider", "anthropic");
+
+      // Set default model for current provider
+      this.currentModel = this.providers[this.currentProvider].defaultModel;
 
       // Check for available API keys
       const availableProviders = [];
@@ -262,18 +272,27 @@ class AIClient {
 
       // Route to appropriate provider
       let response;
+      const requestOptions = {
+        ...options,
+        model: options.model || this.currentModel,
+      };
+
       switch (this.currentProvider) {
         case "anthropic":
-          response = await this.callAnthropicAPI(apiKey, prompt, options);
+          response = await this.callAnthropicAPI(
+            apiKey,
+            prompt,
+            requestOptions
+          );
           break;
         case "openai":
-          response = await this.callOpenAIAPI(apiKey, prompt, options);
+          response = await this.callOpenAIAPI(apiKey, prompt, requestOptions);
           break;
         case "deepseek":
-          response = await this.callDeepSeekAPI(apiKey, prompt, options);
+          response = await this.callDeepSeekAPI(apiKey, prompt, requestOptions);
           break;
         case "local":
-          response = await this.callLocalAPI(prompt, options);
+          response = await this.callLocalAPI(prompt, requestOptions);
           break;
         default:
           throw new Error(`Unsupported provider: ${this.currentProvider}`);
@@ -304,14 +323,9 @@ class AIClient {
       const model = options.model || this.providers.anthropic.defaultModel;
       const maxTokens = options.maxTokens || 4000;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
+      const response = await axios.post(
+        "https://api.anthropic.com/v1/messages",
+        {
           model: model,
           max_tokens: maxTokens,
           messages: [
@@ -320,15 +334,18 @@ class AIClient {
               content: prompt,
             },
           ],
-        }),
-      });
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          timeout: 60000, // 60 second timeout
+        }
+      );
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Anthropic API error: ${response.status} - ${error}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       return {
         content: data.content[0].text,
@@ -339,7 +356,21 @@ class AIClient {
       };
     } catch (error) {
       this.logger.error("Anthropic API call failed:", error);
-      throw error;
+
+      // Handle axios errors properly
+      if (error.response) {
+        const errorMessage =
+          error.response.data?.error?.message ||
+          error.response.data?.message ||
+          JSON.stringify(error.response.data);
+        throw new Error(
+          `Anthropic API error: ${error.response.status} - ${errorMessage}`
+        );
+      } else if (error.request) {
+        throw new Error("Anthropic API: No response received");
+      } else {
+        throw new Error(`Anthropic API: ${error.message}`);
+      }
     }
   }
 
@@ -351,33 +382,28 @@ class AIClient {
       const model = options.model || this.providers.openai.defaultModel;
       const maxTokens = options.maxTokens || 4000;
 
-      const response = await fetch(
+      const response = await axios.post(
         "https://api.openai.com/v1/chat/completions",
         {
-          method: "POST",
+          model: model,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          max_tokens: maxTokens,
+        },
+        {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              {
-                role: "user",
-                content: prompt,
-              },
-            ],
-            max_tokens: maxTokens,
-          }),
+          timeout: 60000, // 60 second timeout
         }
       );
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`OpenAI API error: ${response.status} - ${error}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       return {
         content: data.choices[0].message.content,
@@ -388,7 +414,21 @@ class AIClient {
       };
     } catch (error) {
       this.logger.error("OpenAI API call failed:", error);
-      throw error;
+
+      // Handle axios errors properly
+      if (error.response) {
+        const errorMessage =
+          error.response.data?.error?.message ||
+          error.response.data?.message ||
+          JSON.stringify(error.response.data);
+        throw new Error(
+          `OpenAI API error: ${error.response.status} - ${errorMessage}`
+        );
+      } else if (error.request) {
+        throw new Error("OpenAI API: No response received");
+      } else {
+        throw new Error(`OpenAI API: ${error.message}`);
+      }
     }
   }
 
@@ -400,33 +440,28 @@ class AIClient {
       const model = options.model || this.providers.deepseek.defaultModel;
       const maxTokens = options.maxTokens || 4000;
 
-      const response = await fetch(
+      const response = await axios.post(
         "https://api.deepseek.com/v1/chat/completions",
         {
-          method: "POST",
+          model: model,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          max_tokens: maxTokens,
+        },
+        {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              {
-                role: "user",
-                content: prompt,
-              },
-            ],
-            max_tokens: maxTokens,
-          }),
+          timeout: 60000, // 60 second timeout
         }
       );
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`DeepSeek API error: ${response.status} - ${error}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       return {
         content: data.choices[0].message.content,
@@ -437,7 +472,19 @@ class AIClient {
       };
     } catch (error) {
       this.logger.error("DeepSeek API call failed:", error);
-      throw error;
+
+      // Handle axios errors properly
+      if (error.response) {
+        throw new Error(
+          `DeepSeek API error: ${error.response.status} - ${
+            error.response.data.error?.message || error.response.data
+          }`
+        );
+      } else if (error.request) {
+        throw new Error("DeepSeek API: No response received");
+      } else {
+        throw new Error(`DeepSeek API: ${error.message}`);
+      }
     }
   }
 
@@ -449,24 +496,22 @@ class AIClient {
       const model = options.model || "llama2";
       const baseUrl = options.baseUrl || this.providers.local.baseUrl;
 
-      const response = await fetch(`${baseUrl}/api/generate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const response = await axios.post(
+        `${baseUrl}/api/generate`,
+        {
           model: model,
           prompt: prompt,
           stream: false,
-        }),
-      });
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 120000, // 2 minute timeout for local models
+        }
+      );
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Local LLM API error: ${response.status} - ${error}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       return {
         content: data.response,
@@ -477,7 +522,19 @@ class AIClient {
       };
     } catch (error) {
       this.logger.error("Local LLM API call failed:", error);
-      throw error;
+
+      // Handle axios errors properly
+      if (error.response) {
+        throw new Error(
+          `Local LLM API error: ${error.response.status} - ${error.response.data}`
+        );
+      } else if (error.request) {
+        throw new Error(
+          "Local LLM API: No response received - is your local LLM server running?"
+        );
+      } else {
+        throw new Error(`Local LLM API: ${error.message}`);
+      }
     }
   }
 
@@ -533,6 +590,80 @@ class AIClient {
         usage.completion_tokens * rates.output) /
       1000
     );
+  }
+
+  /**
+   * 🔄 Set current provider
+   */
+  async setCurrentProvider(provider) {
+    if (!this.providers[provider]) {
+      throw new Error(`Unknown provider: ${provider}`);
+    }
+
+    this.currentProvider = provider;
+    this.currentModel = this.providers[provider].defaultModel;
+
+    // Update configuration
+    const config = vscode.workspace.getConfiguration("nox");
+    await config.update(
+      "aiProvider",
+      provider,
+      vscode.ConfigurationTarget.Global
+    );
+
+    this.logger.info(`🔄 Current provider set to: ${provider}`);
+  }
+
+  /**
+   * 🔄 Set current model
+   */
+  async setCurrentModel(model) {
+    const provider = this.providers[this.currentProvider];
+    if (!provider.models.includes(model)) {
+      throw new Error(
+        `Model ${model} not available for provider ${this.currentProvider}`
+      );
+    }
+
+    this.currentModel = model;
+    this.logger.info(`🔄 Current model set to: ${model}`);
+  }
+
+  /**
+   * 📋 Get current provider
+   */
+  getCurrentProvider() {
+    return this.currentProvider;
+  }
+
+  /**
+   * 📋 Get current model
+   */
+  getCurrentModel() {
+    return (
+      this.currentModel || this.providers[this.currentProvider].defaultModel
+    );
+  }
+
+  /**
+   * 📋 Get all providers
+   */
+  getProviders() {
+    return this.providers;
+  }
+
+  /**
+   * 📋 Get models for current provider
+   */
+  getCurrentProviderModels() {
+    return this.providers[this.currentProvider].models;
+  }
+
+  /**
+   * 📋 Get models for specific provider
+   */
+  getProviderModels(provider) {
+    return this.providers[provider]?.models || [];
   }
 
   /**
