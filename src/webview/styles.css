@@ -1,0 +1,7 @@
+/**
+ * 🦊 Nox Enterprise Webview Styles
+ * Main stylesheet entry point - imports all enterprise styles
+ */
+
+/* Import enterprise chat interface styles */
+@import './enterprise-styles.css';

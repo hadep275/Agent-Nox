@@ -357,7 +357,6 @@ class AIClient {
     } catch (error) {
       this.logger.error("Anthropic API call failed:", error);
 
-      // Handle axios errors properly
       if (error.response) {
         const errorMessage =
           error.response.data?.error?.message ||
@@ -630,9 +629,9 @@ class AIClient {
   }
 
   /**
-   * 📋 Get current provider
+   * 📋 Get current provider ID (string)
    */
-  getCurrentProvider() {
+  getCurrentProviderId() {
     return this.currentProvider;
   }
 
@@ -664,6 +663,166 @@ class AIClient {
    */
   getProviderModels(provider) {
     return this.providers[provider]?.models || [];
+  }
+
+  /**
+   * 🚨 Enhanced error message formatting
+   */
+  formatErrorMessage(error, provider) {
+    const errorInfo = this.categorizeError(error, provider);
+
+    return {
+      title: errorInfo.title,
+      message: errorInfo.message,
+      suggestion: errorInfo.suggestion,
+      category: errorInfo.category,
+      helpUrl: errorInfo.helpUrl,
+    };
+  }
+
+  /**
+   * 🔍 Categorize and enhance error messages
+   */
+  categorizeError(error, provider) {
+    const errorMessage = error.message || error.toString();
+
+    // API Key errors
+    if (
+      errorMessage.includes("401") ||
+      errorMessage.includes("Unauthorized") ||
+      errorMessage.includes("Invalid API key")
+    ) {
+      return {
+        title: "🔑 API Key Issue",
+        message: `Your ${
+          this.providers[provider]?.name || provider
+        } API key appears to be invalid or missing.`,
+        suggestion: `Please check your API key in Nox Settings and ensure it's correctly configured for ${provider}.`,
+        category: "api_key",
+        helpUrl: this.getProviderHelpUrl(provider, "api_key"),
+      };
+    }
+
+    // Rate limit errors
+    if (
+      errorMessage.includes("429") ||
+      errorMessage.includes("rate limit") ||
+      errorMessage.includes("quota")
+    ) {
+      return {
+        title: "⏱️ Rate Limit Exceeded",
+        message: `You've exceeded the rate limit for ${
+          this.providers[provider]?.name || provider
+        }.`,
+        suggestion:
+          "Please wait a moment before trying again, or consider upgrading your API plan for higher limits.",
+        category: "rate_limit",
+        helpUrl: this.getProviderHelpUrl(provider, "rate_limit"),
+      };
+    }
+
+    // Network errors
+    if (
+      errorMessage.includes("ENOTFOUND") ||
+      errorMessage.includes("ECONNREFUSED") ||
+      errorMessage.includes("timeout")
+    ) {
+      return {
+        title: "🌐 Network Connection Issue",
+        message: "Unable to connect to the AI service.",
+        suggestion:
+          "Please check your internet connection and try again. If using a local LLM, ensure the server is running.",
+        category: "network",
+        helpUrl: this.getProviderHelpUrl(provider, "network"),
+      };
+    }
+
+    // Model errors
+    if (
+      errorMessage.includes("404") ||
+      errorMessage.includes("model") ||
+      errorMessage.includes("not found")
+    ) {
+      return {
+        title: "🤖 Model Not Available",
+        message: `The selected model is not available or doesn't exist for ${
+          this.providers[provider]?.name || provider
+        }.`,
+        suggestion:
+          "Please select a different model from the dropdown or check if your API plan includes access to this model.",
+        category: "model",
+        helpUrl: this.getProviderHelpUrl(provider, "model"),
+      };
+    }
+
+    // Token/context errors
+    if (
+      errorMessage.includes("context") ||
+      errorMessage.includes("token") ||
+      errorMessage.includes("too long")
+    ) {
+      return {
+        title: "📏 Message Too Long",
+        message: "Your message exceeds the maximum token limit for this model.",
+        suggestion:
+          "Please shorten your message or break it into smaller parts.",
+        category: "context",
+        helpUrl: this.getProviderHelpUrl(provider, "context"),
+      };
+    }
+
+    // Generic error
+    return {
+      title: "❌ Unexpected Error",
+      message: errorMessage,
+      suggestion:
+        "Please try again. If the problem persists, check your API key and internet connection.",
+      category: "generic",
+      helpUrl: this.getProviderHelpUrl(provider, "generic"),
+    };
+  }
+
+  /**
+   * 🔗 Get help URLs for different providers and error types
+   */
+  getProviderHelpUrl(provider, errorType) {
+    const helpUrls = {
+      anthropic: {
+        api_key: "https://console.anthropic.com/account/keys",
+        rate_limit: "https://docs.anthropic.com/claude/reference/rate-limits",
+        model: "https://docs.anthropic.com/claude/docs/models-overview",
+        network: "https://docs.anthropic.com/claude/reference/getting-started",
+        context:
+          "https://docs.anthropic.com/claude/docs/models-overview#context-window",
+        generic: "https://docs.anthropic.com/claude/reference/errors",
+      },
+      openai: {
+        api_key: "https://platform.openai.com/account/api-keys",
+        rate_limit: "https://platform.openai.com/docs/guides/rate-limits",
+        model: "https://platform.openai.com/docs/models",
+        network: "https://platform.openai.com/docs/quickstart",
+        context: "https://platform.openai.com/docs/guides/text-generation",
+        generic: "https://platform.openai.com/docs/guides/error-codes",
+      },
+      deepseek: {
+        api_key: "https://platform.deepseek.com/api_keys",
+        rate_limit: "https://platform.deepseek.com/docs",
+        model: "https://platform.deepseek.com/docs",
+        network: "https://platform.deepseek.com/docs",
+        context: "https://platform.deepseek.com/docs",
+        generic: "https://platform.deepseek.com/docs",
+      },
+      local: {
+        api_key: null,
+        rate_limit: null,
+        model: "https://ollama.com/library",
+        network: "https://ollama.com/docs",
+        context: "https://ollama.com/docs",
+        generic: "https://ollama.com/docs",
+      },
+    };
+
+    return helpUrls[provider]?.[errorType] || null;
   }
 
   /**
