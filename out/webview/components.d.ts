@@ -12,9 +12,21 @@ export declare class MessageComponent {
      */
     static create(props: MessageComponentProps): HTMLElement;
     /**
-     * Create message metadata element
+     * Create message metadata element with enhanced info and actions
      */
     private static createMessageMeta;
+    /**
+     * Copy message content to clipboard
+     */
+    private static copyMessageContent;
+    /**
+     * Regenerate assistant message
+     */
+    private static regenerateMessage;
+    /**
+     * Delete message
+     */
+    private static deleteMessage;
 }
 /**
  * Code Block Component (placeholder for Phase 4)

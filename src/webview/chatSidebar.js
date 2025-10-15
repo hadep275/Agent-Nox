@@ -80,10 +80,32 @@ class NoxChatViewProvider {
               await this.sendProviderStatus();
               break;
 
+            case "deleteMessage":
+              // TODO: Implement delete message functionality
+              this.logger.info("Delete message requested:", message.messageId);
+              break;
+
+            case "regenerateMessage":
+              // TODO: Implement regenerate message functionality
+              this.logger.info(
+                "Regenerate message requested:",
+                message.messageId
+              );
+              break;
+
+            case "clearChat":
+              this.clearChatHistory();
+              break;
+
             case "openUrl":
               if (message.url) {
                 await vscode.env.openExternal(vscode.Uri.parse(message.url));
               }
+              break;
+
+            case "providerSectionToggled":
+              // Update the toggle button icon based on collapsed state
+              await this.updateToggleButtonIcon(message.collapsed);
               break;
 
             default:
@@ -440,8 +462,10 @@ class NoxChatViewProvider {
         <div class="aurora-bg"></div>
         <div class="chat-container">
 
-            <!-- Provider & Model Selection -->
-            <div class="provider-controls">
+
+
+            <!-- Provider & Model Selection (Collapsible) -->
+            <div class="provider-controls" id="providerControls">
                 <div class="provider-selector">
                     <label for="providerSelect">🤖 Provider:</label>
                     <select id="providerSelect" class="provider-dropdown">
@@ -503,6 +527,32 @@ class NoxChatViewProvider {
   }
 
   /**
+   * 🗑️ Clear chat history
+   */
+  clearChatHistory() {
+    try {
+      this.chatHistory = [];
+      this.saveChatHistory()
+        .then(() => {
+          // Notify webview that chat was cleared
+          this.sendMessageToWebview({
+            type: "clearMessages",
+          });
+          this.logger.info("🗑️ Chat history cleared");
+        })
+        .catch((error) => {
+          this.logger.error("Failed to clear chat history:", error);
+          this.sendErrorToWebview(
+            "Failed to clear chat history: " + error.message
+          );
+        });
+    } catch (error) {
+      this.logger.error("Failed to clear chat history:", error);
+      this.sendErrorToWebview("Failed to clear chat history: " + error.message);
+    }
+  }
+
+  /**
    * 🎨 Generate a nonce for CSP
    */
   getNonce() {
@@ -528,6 +578,28 @@ class NoxChatViewProvider {
    */
   getWebviewJS() {
     return "";
+  }
+
+  /**
+   * 🔄 Update toggle button icon based on collapsed state
+   */
+  async updateToggleButtonIcon(collapsed) {
+    try {
+      // Update the command icon in package.json dynamically
+      const newIcon = collapsed ? "$(chevron-right)" : "$(chevron-down)";
+
+      // We can't dynamically update package.json commands, but we can log the state
+      this.logger.info(
+        `🦊 Provider section ${
+          collapsed ? "collapsed" : "expanded"
+        } - icon should be ${newIcon}`
+      );
+
+      // Note: VS Code doesn't support dynamic command icon updates
+      // The icon animation would need to be handled in CSS within the webview
+    } catch (error) {
+      this.logger.error("Error updating toggle button icon:", error);
+    }
   }
 }
 

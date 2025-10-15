@@ -157,6 +157,65 @@ class NoxChatApp {
         model: target.value
       } as ModelChangeRequest);
     });
+
+    // Header controls
+    this.setupHeaderControls();
+  }
+
+  private setupHeaderControls(): void {
+    // Header controls are now handled by VS Code native header
+    // Toggle functionality is handled via extension message in handleExtensionMessage()
+    console.log('🦊 Header controls setup - using VS Code native header');
+  }
+
+  private toggleProviderSection(): void {
+    console.log('🦊 Toggle provider section called');
+    const providerControls = document.getElementById('providerControls') as HTMLElement;
+
+    if (!providerControls) {
+      console.log('🦊 Provider controls element not found');
+      return;
+    }
+
+    const isCollapsed = providerControls.classList.contains('collapsed');
+    console.log('🦊 Current collapsed state:', isCollapsed);
+
+    if (isCollapsed) {
+      providerControls.classList.remove('collapsed');
+      console.log('🦊 Expanded provider section');
+    } else {
+      providerControls.classList.add('collapsed');
+      console.log('🦊 Collapsed provider section');
+    }
+
+    // Send the new state back to extension for button icon update
+    this.sendMessage({
+      type: 'providerSectionToggled',
+      collapsed: !isCollapsed
+    } as any);
+  }
+
+  private clearChat(): void {
+    // Clear the messages container
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer) {
+      messagesContainer.innerHTML = `
+        <div class="welcome-message">
+          <div class="fox-welcome">🦊</div>
+          <div class="welcome-text">
+            <h3>Welcome to Nox!</h3>
+            <p>Your clever AI coding fox is ready to help.</p>
+            <div class="bundled-indicator">✨ Enterprise Bundle</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Reset session stats
+    this.resetSessionStats();
+
+    // Notify extension to clear chat history
+    this.sendMessage({ type: 'clearChat' });
   }
 
   private setupMessageHandling(): void {
@@ -223,6 +282,7 @@ class NoxChatApp {
 
       case 'clearMessages':
         this.clearMessages();
+        this.resetSessionStats();
         break;
 
       case 'loadHistory':
@@ -233,8 +293,75 @@ class NoxChatApp {
         this.updateProviderStatus(message);
         break;
 
+      case 'messageDeleted':
+        this.removeMessage(message.messageId);
+        break;
+
+      case 'messageRegenerated':
+        this.replaceMessage(message.oldMessageId, message.newMessage);
+        break;
+
+      case 'toggleProviderSection':
+        this.toggleProviderSection();
+        break;
+
       default:
         console.warn('Unknown message type:', message.type);
+    }
+  }
+
+  /**
+   * Remove a message from the chat
+   */
+  private removeMessage(messageId: string): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageEl) {
+      messageEl.remove();
+      // Remove from state
+      this.state.chatHistory = this.state.chatHistory.filter(msg => msg.id !== messageId);
+    }
+  }
+
+  /**
+   * Replace a message with a new one (for regeneration)
+   */
+  private replaceMessage(oldMessageId: string, newMessage: ChatMessage): void {
+    const oldMessageEl = document.querySelector(`[data-message-id="${oldMessageId}"]`);
+    if (oldMessageEl) {
+      const newMessageEl = MessageComponent.create({ message: newMessage });
+      oldMessageEl.parentNode?.replaceChild(newMessageEl, oldMessageEl);
+
+      // Update state
+      const index = this.state.chatHistory.findIndex(msg => msg.id === oldMessageId);
+      if (index !== -1) {
+        this.state.chatHistory[index] = newMessage;
+      }
+    }
+  }
+
+  /**
+   * Reset session statistics
+   */
+  private resetSessionStats(): void {
+    this.state.sessionStats = {
+      totalTokens: 0,
+      totalCost: 0,
+      messageCount: 0,
+      startTime: new Date().toISOString()
+    };
+
+    if (this.elements.sessionTokens) {
+      this.elements.sessionTokens.textContent = '0';
+    }
+
+    if (this.elements.sessionCost) {
+      this.elements.sessionCost.textContent = '$0.00';
+    }
+
+    // Remove session summary
+    const summaryEl = document.getElementById('sessionSummary');
+    if (summaryEl) {
+      summaryEl.remove();
     }
   }
 
@@ -416,6 +543,7 @@ class NoxChatApp {
   private updateSessionStats(tokens: number = 0, cost: number = 0): void {
     this.state.sessionStats.totalTokens += tokens;
     this.state.sessionStats.totalCost += cost;
+    this.state.sessionStats.messageCount += 1;
 
     if (this.elements.sessionTokens) {
       this.elements.sessionTokens.textContent = this.state.sessionStats.totalTokens.toLocaleString();
@@ -423,6 +551,59 @@ class NoxChatApp {
 
     if (this.elements.sessionCost) {
       this.elements.sessionCost.textContent = '$' + this.state.sessionStats.totalCost.toFixed(4);
+    }
+
+    // Update session summary if it exists
+    this.updateSessionSummary();
+  }
+
+  /**
+   * Update session summary display
+   */
+  private updateSessionSummary(): void {
+    let summaryEl = document.getElementById('sessionSummary');
+    if (!summaryEl) {
+      // Create session summary element
+      summaryEl = document.createElement('div');
+      summaryEl.id = 'sessionSummary';
+      summaryEl.className = 'session-summary';
+
+      // Insert after cost tracker
+      const costTracker = document.getElementById('costTracker');
+      if (costTracker && costTracker.parentNode) {
+        costTracker.parentNode.insertBefore(summaryEl, costTracker.nextSibling);
+      }
+    }
+
+    const sessionDuration = this.getSessionDuration();
+    const avgCostPerMessage = this.state.sessionStats.messageCount > 0
+      ? (this.state.sessionStats.totalCost / this.state.sessionStats.messageCount).toFixed(4)
+      : '0.0000';
+
+    summaryEl.innerHTML = `
+      <span class="session-messages">${this.state.sessionStats.messageCount} messages</span>
+      <span>•</span>
+      <span>${sessionDuration}</span>
+      <span>•</span>
+      <span>$${avgCostPerMessage}/msg avg</span>
+    `;
+  }
+
+  /**
+   * Get formatted session duration
+   */
+  private getSessionDuration(): string {
+    const startTime = new Date(this.state.sessionStats.startTime);
+    const now = new Date();
+    const diffMs = now.getTime() - startTime.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 60) {
+      return `${diffMins}m`;
+    } else {
+      const hours = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      return `${hours}h ${mins}m`;
     }
   }
 

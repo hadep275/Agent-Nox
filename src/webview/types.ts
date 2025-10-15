@@ -34,12 +34,21 @@ export interface ClearHistoryRequest extends BaseMessage {
   type: 'clearHistory';
 }
 
+export interface ClearChatRequest extends BaseMessage {
+  type: 'clearChat';
+}
+
 export interface ReadyMessage extends BaseMessage {
   type: 'ready';
 }
 
 export interface GetProviderStatusRequest extends BaseMessage {
   type: 'getProviderStatus';
+}
+
+export interface ProviderSectionToggledRequest extends BaseMessage {
+  type: 'providerSectionToggled';
+  collapsed: boolean;
 }
 
 // Response message types

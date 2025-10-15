@@ -198,6 +198,24 @@ class NoxExtension {
           await this.openSettingsPanel();
         }),
 
+        // Toggle provider section command
+        vscode.commands.registerCommand(
+          "nox.toggleProviderSection",
+          async () => {
+            if (
+              this.chatSidebarProvider &&
+              this.chatSidebarProvider.webviewView
+            ) {
+              this.chatSidebarProvider.webviewView.webview.postMessage({
+                type: "toggleProviderSection",
+              });
+              console.log("🦊 Toggle command sent to webview");
+            } else {
+              console.log("🦊 Toggle command failed - webview not available");
+            }
+          }
+        ),
+
         // Individual settings commands (for submenu)
         vscode.commands.registerCommand("nox.manageApiKeys", async () => {
           await vscode.commands.executeCommand("nox.apiKeys");

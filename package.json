@@ -118,6 +118,11 @@
         "command": "nox.openSettingsPanel",
         "title": "Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "nox.toggleProviderSection",
+        "title": "Toggle Provider Section",
+        "icon": "$(chevron-down)"
       }
     ],
     "submenus": [
@@ -149,14 +154,19 @@
       ],
       "view/title": [
         {
-          "command": "nox.openSettingsPanel",
+          "command": "nox.toggleProviderSection",
           "when": "view == noxChat",
           "group": "navigation@1"
         },
         {
-          "command": "nox.clearChat",
+          "command": "nox.openSettingsPanel",
           "when": "view == noxChat",
           "group": "navigation@2"
+        },
+        {
+          "command": "nox.clearChat",
+          "when": "view == noxChat",
+          "group": "navigation@3"
         }
       ],
       "nox.settingsSubmenu": [

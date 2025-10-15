@@ -43,26 +43,186 @@ export class MessageComponent {
   }
 
   /**
-   * Create message metadata element
+   * Create message metadata element with enhanced info and actions
    */
   private static createMessageMeta(message: ChatMessage): HTMLElement {
     const metaEl = document.createElement('div');
     metaEl.className = 'message-meta';
 
-    const time = new Date(message.timestamp).toLocaleTimeString([], {
+    // Create info section
+    const infoEl = document.createElement('div');
+    infoEl.className = 'message-info';
+
+    // Enhanced date/time formatting
+    const messageDate = new Date(message.timestamp);
+    const now = new Date();
+    const isToday = messageDate.toDateString() === now.toDateString();
+    const isYesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toDateString() === messageDate.toDateString();
+
+    let timeText: string;
+    let dateText: string = '';
+
+    // Format time
+    const timeFormatted = messageDate.toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit'
     });
 
-    if (message.type === 'assistant') {
-      const cost = message.cost ? ` • $${message.cost.toFixed(4)}` : '';
-      const model = message.model ? ` • ${message.model}` : '';
-      metaEl.textContent = `${time} • ${message.tokens || 0} tokens${cost} • ${message.provider || 'AI'}${model}`;
+    // Format date based on recency
+    if (isToday) {
+      timeText = timeFormatted;
+    } else if (isYesterday) {
+      timeText = timeFormatted;
+      dateText = 'Yesterday';
     } else {
-      metaEl.textContent = time;
+      timeText = timeFormatted;
+      dateText = messageDate.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+        year: messageDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+      });
     }
 
+    // Time element
+    const timeEl = document.createElement('span');
+    timeEl.className = 'message-time';
+    timeEl.textContent = timeText;
+    timeEl.title = messageDate.toLocaleString(); // Full timestamp on hover
+    infoEl.appendChild(timeEl);
+
+    // Date element (if not today)
+    if (dateText) {
+      const dateEl = document.createElement('span');
+      dateEl.className = 'message-date';
+      dateEl.textContent = dateText;
+      dateEl.title = messageDate.toLocaleDateString();
+      infoEl.appendChild(dateEl);
+    }
+
+    // Assistant-specific metadata
+    if (message.type === 'assistant') {
+      // Provider badge
+      if (message.provider) {
+        const providerEl = document.createElement('span');
+        providerEl.className = 'message-provider';
+        providerEl.textContent = message.provider;
+        infoEl.appendChild(providerEl);
+      }
+
+      // Tokens badge
+      if (message.tokens) {
+        const tokensEl = document.createElement('span');
+        tokensEl.className = 'message-tokens';
+        tokensEl.textContent = `${message.tokens} tokens`;
+        infoEl.appendChild(tokensEl);
+      }
+
+      // Cost badge
+      if (message.cost) {
+        const costEl = document.createElement('span');
+        costEl.className = 'message-cost';
+        costEl.textContent = `$${message.cost.toFixed(4)}`;
+        infoEl.appendChild(costEl);
+      }
+
+      // Model info (smaller, less prominent)
+      if (message.model) {
+        const modelEl = document.createElement('span');
+        modelEl.className = 'message-model';
+        modelEl.textContent = message.model;
+        modelEl.style.fontSize = '8px';
+        modelEl.style.opacity = '0.6';
+        infoEl.appendChild(modelEl);
+      }
+    }
+
+    // Create actions section
+    const actionsEl = document.createElement('div');
+    actionsEl.className = 'message-actions';
+
+    // Copy button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'message-action-btn copy';
+    copyBtn.textContent = '📋 Copy';
+    copyBtn.title = 'Copy message content';
+    copyBtn.onclick = () => this.copyMessageContent(message);
+    actionsEl.appendChild(copyBtn);
+
+    // Regenerate button (only for assistant messages)
+    if (message.type === 'assistant') {
+      const regenerateBtn = document.createElement('button');
+      regenerateBtn.className = 'message-action-btn regenerate';
+      regenerateBtn.textContent = '🔄 Regenerate';
+      regenerateBtn.title = 'Regenerate this response';
+      regenerateBtn.onclick = () => this.regenerateMessage(message);
+      actionsEl.appendChild(regenerateBtn);
+    }
+
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'message-action-btn delete';
+    deleteBtn.textContent = '🗑️ Delete';
+    deleteBtn.title = 'Delete this message';
+    deleteBtn.onclick = () => this.deleteMessage(message);
+    actionsEl.appendChild(deleteBtn);
+
+    metaEl.appendChild(infoEl);
+    metaEl.appendChild(actionsEl);
+
     return metaEl;
+  }
+
+  /**
+   * Copy message content to clipboard
+   */
+  private static copyMessageContent(message: ChatMessage): void {
+    navigator.clipboard.writeText(message.content).then(() => {
+      // Show temporary feedback
+      const notification = document.createElement('div');
+      notification.textContent = '✅ Copied to clipboard';
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--aurora-green);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        z-index: 1000;
+        animation: fadeInOut 2s ease-in-out;
+      `;
+      document.body.appendChild(notification);
+      setTimeout(() => notification.remove(), 2000);
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+    });
+  }
+
+  /**
+   * Regenerate assistant message
+   */
+  private static regenerateMessage(message: ChatMessage): void {
+    // Send message to extension to regenerate
+    const vscode = (window as any).acquireVsCodeApi();
+    vscode.postMessage({
+      type: 'regenerateMessage',
+      messageId: message.id
+    });
+  }
+
+  /**
+   * Delete message
+   */
+  private static deleteMessage(message: ChatMessage): void {
+    if (confirm('Are you sure you want to delete this message?')) {
+      // Send message to extension to delete
+      const vscode = (window as any).acquireVsCodeApi();
+      vscode.postMessage({
+        type: 'deleteMessage',
+        messageId: message.id
+      });
+    }
   }
 }
 
