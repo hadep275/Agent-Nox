@@ -101,6 +101,10 @@ declare class NoxChatViewProvider {
      * 🎤 Stop voice recording
      */
     stopVoiceRecording(): Promise<void>;
+    /**
+     * 🎤 Send current voice status to webview
+     */
+    sendVoiceStatus(): Promise<void>;
 }
 import VoiceRecordingService = require("../core/voiceRecordingService");
 //# sourceMappingURL=chatSidebar.d.ts.map

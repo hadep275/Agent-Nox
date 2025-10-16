@@ -127,7 +127,7 @@ class NoxChatApp {
 
     // Request initial data from extension
     this.sendMessage({ type: 'ready' });
-    this.sendMessage({ type: 'getProviderStatus' });
+    this.sendMessage({ type: 'getVoiceStatus' });
 
 
   }
@@ -327,12 +327,16 @@ class NoxChatApp {
         this.insertVoiceText(message.text);
         break;
 
-      case 'showVoiceModal':
-        this.showVoiceModal(message.recording);
+      case 'showInlineRecording':
+        this.showInlineRecording(message.recording);
         break;
 
-      case 'hideVoiceModal':
-        this.hideVoiceModal();
+      case 'hideInlineRecording':
+        this.hideInlineRecording();
+        break;
+
+      case 'voiceStatus':
+        this.handleVoiceStatus(message.status);
         break;
 
       default:
@@ -375,51 +379,49 @@ class NoxChatApp {
   }
 
   /**
-   * 🎤 Show voice recording modal
+   * 🎤 Show inline voice recording animation
    */
-  private showVoiceModal(recording: boolean): void {
-    // Create modal if it doesn't exist
-    let modal = document.getElementById('voiceModal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'voiceModal';
-      modal.className = 'voice-modal';
-      modal.innerHTML = `
-        <div class="voice-modal-content">
-          <div class="voice-modal-icon">🎤</div>
-          <div class="voice-modal-text">Listening...</div>
-          <div class="voice-modal-animation">
-            <div class="pulse-ring"></div>
-            <div class="pulse-ring"></div>
-            <div class="pulse-ring"></div>
-          </div>
-          <button class="voice-modal-stop" onclick="window.noxChatApp.stopVoiceRecording()">Stop</button>
-        </div>
-      `;
-      document.body.appendChild(modal);
+  private showInlineRecording(recording: boolean): void {
+    // Show animation inside input field
+    const animation = document.getElementById('voiceRecordingAnimation');
+    if (animation) {
+      animation.style.display = 'flex';
     }
 
-    // Show modal
-    modal.style.display = 'flex';
+    // Add recording class to input for padding adjustment
+    const messageInput = document.getElementById('messageInput') as HTMLTextAreaElement;
+    if (messageInput) {
+      messageInput.classList.add('recording');
+      messageInput.placeholder = 'Listening...';
+    }
+
     this.isRecording = recording;
     this.updateMicButtonState();
 
-    console.log('🎤 Voice modal shown');
+    console.log('🎤 Inline recording animation shown');
   }
 
   /**
-   * 🎤 Hide voice recording modal
+   * 🎤 Hide inline voice recording animation
    */
-  private hideVoiceModal(): void {
-    const modal = document.getElementById('voiceModal');
-    if (modal) {
-      modal.style.display = 'none';
+  private hideInlineRecording(): void {
+    // Hide animation
+    const animation = document.getElementById('voiceRecordingAnimation');
+    if (animation) {
+      animation.style.display = 'none';
+    }
+
+    // Remove recording class from input
+    const messageInput = document.getElementById('messageInput') as HTMLTextAreaElement;
+    if (messageInput) {
+      messageInput.classList.remove('recording');
+      messageInput.placeholder = 'Ask Nox anything about your code...';
     }
 
     this.isRecording = false;
     this.updateMicButtonState();
 
-    console.log('🎤 Voice modal hidden');
+    console.log('🎤 Inline recording animation hidden');
   }
 
   /**
@@ -856,34 +858,78 @@ class NoxChatApp {
   }
 
   /**
-   * 🎤 Toggle voice recording - Simple approach via extension backend
+   * 🎤 Toggle voice recording - Mic button toggles between mic and stop icon
    */
   private async toggleVoiceRecording(): Promise<void> {
     // Hide any previous error messages
     this.hideVoiceError();
 
     if (this.isRecording) {
-      // Stop recording
+      // Stop recording (mic button shows stop icon, user clicked to stop)
       this.sendMessage({
         type: 'stopVoiceRecording'
       });
-      console.log('🎤 Stopping voice recording via extension');
+      console.log('🎤 Stop voice recording requested from mic button toggle');
     } else {
-      // Start simple voice recording via extension
+      // Start recording (mic button shows mic icon, user clicked to start)
       this.startSimpleVoiceRecording();
     }
   }
 
   /**
-   * 🎤 Update microphone button visual state
+   * 🎤 Update microphone button visual state based on settings and recording state
    */
   private updateMicButtonState(): void {
     if (!this.elements.micBtn) return;
 
+    // Request current voice settings from extension
+    this.sendMessage({ type: 'getVoiceStatus' });
+  }
+
+  /**
+   * 🎤 Handle voice status response from extension
+   */
+  private handleVoiceStatus(status: any): void {
+    if (!status) return;
+
+    // Check if any engine is available
+    const hasValidEngine = status.engines.free || status.engines.openai || status.engines.google;
+
+    // Update mic button state
+    this.updateMicButtonWithSettings(status.enabled, hasValidEngine);
+  }
+
+  /**
+   * 🎤 Update mic button state with voice settings
+   */
+  private updateMicButtonWithSettings(voiceEnabled: boolean, hasValidEngine: boolean): void {
+    if (!this.elements.micBtn) return;
+
+    if (!voiceEnabled) {
+      // Voice is disabled in settings
+      this.elements.micBtn.disabled = true;
+      this.elements.micBtn.classList.remove('recording');
+      this.elements.micBtn.title = 'Voice input is disabled. Enable it in Nox Settings.';
+      return;
+    }
+
+    if (!hasValidEngine) {
+      // No valid voice engine configured
+      this.elements.micBtn.disabled = true;
+      this.elements.micBtn.classList.remove('recording');
+      this.elements.micBtn.title = 'No voice engine configured. Set up API keys in Nox Settings.';
+      return;
+    }
+
+    // Voice is enabled and has valid engine
+    this.elements.micBtn.disabled = false;
+
     if (this.isRecording) {
+      // Recording state: show stop icon, red styling
       this.elements.micBtn.classList.add('recording');
       this.elements.micBtn.title = 'Stop recording (click to stop)';
     } else {
+      // Idle state: show mic icon, normal styling
       this.elements.micBtn.classList.remove('recording');
       if (this.permissionState === 'denied') {
         this.elements.micBtn.title = 'Microphone permission denied - click to enable';

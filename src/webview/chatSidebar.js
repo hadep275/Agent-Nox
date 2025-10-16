@@ -127,6 +127,19 @@ class NoxChatViewProvider {
               break;
 
             case "stopVoiceRecording":
+              // Stop voice recording via extension backend (from mic button toggle)
+              this.logger.info(
+                "🎤 Stopping voice recording via mic button toggle"
+              );
+              await this.stopVoiceRecording();
+              break;
+
+            case "getVoiceStatus":
+              // Send current voice status to webview
+              await this.sendVoiceStatus();
+              break;
+
+            case "stopVoiceRecording":
               // Stop voice recording
               this.logger.info("🎤 Stopping voice recording");
               await this.stopVoiceRecording();
@@ -538,12 +551,25 @@ class NoxChatViewProvider {
                 <div class="input-wrapper">
                     <div class="input-field-container">
                         <textarea id="messageInput" class="message-input" placeholder="Ask Nox anything about your code..." rows="1"></textarea>
+
+                        <!-- Voice Recording Animation (inside input field) -->
+                        <div id="voiceRecordingAnimation" class="voice-recording-animation" style="display: none;">
+                            <div class="pulse-dot"></div>
+                            <div class="pulse-dot"></div>
+                            <div class="pulse-dot"></div>
+                        </div>
+
                         <button id="micBtn" class="mic-button-inline" title="Voice input (click to start/stop recording)">
+                            <!-- Microphone Icon -->
                             <svg class="mic-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                                 <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                                 <line x1="12" y1="19" x2="12" y2="23"></line>
                                 <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                            <!-- Stop Icon (hidden by default) -->
+                            <svg class="stop-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                                <rect x="6" y="6" width="12" height="12"></rect>
                             </svg>
                         </button>
                     </div>
@@ -551,6 +577,8 @@ class NoxChatViewProvider {
                         <span class="send-icon">🚀</span>
                     </button>
                 </div>
+
+
                 <!-- Voice Error Display -->
                 <div id="voiceError" class="voice-error-message" style="display: none;">
                     <div class="error-content">
@@ -669,9 +697,9 @@ class NoxChatViewProvider {
         return;
       }
 
-      // Show recording modal in webview
+      // Show inline recording indicator in webview
       this.webviewView.webview.postMessage({
-        type: "showVoiceModal",
+        type: "showInlineRecording",
         recording: true,
       });
 
@@ -686,9 +714,9 @@ class NoxChatViewProvider {
     } catch (error) {
       this.logger.error("🎤 Voice recording failed:", error);
 
-      // Show error and hide modal
+      // Show error and hide inline recording
       this.webviewView.webview.postMessage({
-        type: "hideVoiceModal",
+        type: "hideInlineRecording",
       });
 
       // Show error message
@@ -708,9 +736,9 @@ class NoxChatViewProvider {
       // Stop recording and get transcription
       const result = await this.voiceRecordingService.stopRecording();
 
-      // Hide recording modal
+      // Hide inline recording indicator
       this.webviewView.webview.postMessage({
-        type: "hideVoiceModal",
+        type: "hideInlineRecording",
       });
 
       if (result.success && result.text) {
@@ -727,15 +755,42 @@ class NoxChatViewProvider {
     } catch (error) {
       this.logger.error("🎤 Stop recording failed:", error);
 
-      // Hide modal
+      // Hide inline recording indicator
       this.webviewView.webview.postMessage({
-        type: "hideVoiceModal",
+        type: "hideInlineRecording",
       });
 
       // Show error message
       vscode.window.showErrorMessage(
         `🎤 Voice transcription failed: ${error.message}`
       );
+    }
+  }
+
+  /**
+   * 🎤 Send current voice status to webview
+   */
+  async sendVoiceStatus() {
+    try {
+      const status = this.voiceRecordingService.getRecordingStatus();
+
+      // Send voice status to webview
+      this.webviewView.webview.postMessage({
+        type: "voiceStatus",
+        status: {
+          enabled: status.voiceEnabled,
+          engine: status.currentEngine,
+          engines: {
+            free: true, // Vosk is always available
+            openai: status.openaiAvailable,
+            google: status.googleAvailable,
+          },
+        },
+      });
+
+      this.logger.info("🎤 Voice status sent to webview");
+    } catch (error) {
+      this.logger.error("🎤 Failed to send voice status:", error);
     }
   }
 }
