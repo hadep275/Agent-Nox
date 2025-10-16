@@ -568,7 +568,7 @@ class NoxChatViewProvider {
                                 <line x1="8" y1="23" x2="16" y2="23"></line>
                             </svg>
                             <!-- Stop Icon (hidden by default) -->
-                            <svg class="stop-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="display: none;">
+                            <svg class="stop-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
                                 <rect x="6" y="6" width="12" height="12"></rect>
                             </svg>
                         </button>

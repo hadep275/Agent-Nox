@@ -598,12 +598,11 @@ body {
 .mic-button-inline.recording .stop-icon {
   display: block !important;
   color: #ff0000 !important;
-  fill: #ff0000 !important;
   position: relative !important;
   top: 0 !important;
   left: 0 !important;
   transform: none !important;
-  /* Bright red stop button with exact positioning like mic icon */
+  /* Bright red hollow square outline - no fill for transparent center */
 }
 
 /* Button animation removed - using static icons with pulsing dots animation instead */
