@@ -46,11 +46,19 @@ class NoxChatApp {
     messagesContainer?: HTMLElement;
     messageInput?: HTMLTextAreaElement;
     sendBtn?: HTMLButtonElement;
+    micBtn?: HTMLButtonElement;
+    voiceError?: HTMLElement;
     thinkingIndicator?: HTMLElement;
     providerControls?: HTMLElement;
     sessionCost?: HTMLElement;
     sessionTokens?: HTMLElement;
   } = {};
+
+  // Speech Recognition properties
+  private speechRecognition: any = null;
+  private isRecording: boolean = false;
+  private speechSupported: boolean = false;
+  private permissionState: 'unknown' | 'granted' | 'denied' = 'unknown';
 
   constructor() {
     this.vscode = acquireVsCodeApi();
@@ -103,8 +111,13 @@ class NoxChatApp {
     this.elements.messagesContainer = document.getElementById('messagesContainer') as HTMLElement;
     this.elements.messageInput = document.getElementById('messageInput') as HTMLTextAreaElement;
     this.elements.sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
+    this.elements.micBtn = document.getElementById('micBtn') as HTMLButtonElement;
+    this.elements.voiceError = document.getElementById('voiceError') as HTMLElement;
     this.elements.sessionCost = document.getElementById('sessionCost') as HTMLElement;
     this.elements.sessionTokens = document.getElementById('sessionTokens') as HTMLElement;
+
+    // Initialize speech recognition
+    this.initializeSpeechRecognition();
 
     // Setup event listeners
     this.setupEventListeners();
@@ -123,6 +136,11 @@ class NoxChatApp {
     // Send button click
     this.elements.sendBtn?.addEventListener('click', () => {
       this.sendUserMessage();
+    });
+
+    // Microphone button click
+    this.elements.micBtn?.addEventListener('click', () => {
+      this.toggleVoiceRecording();
     });
 
     // Enter key to send (Shift+Enter for new line)
@@ -305,8 +323,115 @@ class NoxChatApp {
         this.toggleProviderSection();
         break;
 
+      case 'insertVoiceText':
+        this.insertVoiceText(message.text);
+        break;
+
+      case 'showVoiceModal':
+        this.showVoiceModal(message.recording);
+        break;
+
+      case 'hideVoiceModal':
+        this.hideVoiceModal();
+        break;
+
       default:
         console.warn('Unknown message type:', message.type);
+    }
+  }
+
+  /**
+   * 🎤 Trigger native voice input command
+   */
+  private triggerNativeVoiceInput(): void {
+    // Send message to extension to trigger native voice input command
+    this.sendMessage({
+      type: 'triggerNativeVoice'
+    });
+    console.log('🎤 Triggered native voice input command');
+  }
+
+  /**
+   * 🎤 Insert voice text into input field
+   */
+  private insertVoiceText(text: string): void {
+    if (this.elements.messageInput && text) {
+      // Insert the voice text into the input field
+      const currentValue = this.elements.messageInput.value;
+      const newValue = currentValue ? `${currentValue} ${text}` : text;
+      this.elements.messageInput.value = newValue;
+
+      // Auto-resize the textarea
+      this.autoResizeTextarea();
+
+      // Focus the input field
+      this.elements.messageInput.focus();
+
+      // Position cursor at the end
+      this.elements.messageInput.setSelectionRange(newValue.length, newValue.length);
+
+      console.log('🎤 Voice text inserted:', text);
+    }
+  }
+
+  /**
+   * 🎤 Show voice recording modal
+   */
+  private showVoiceModal(recording: boolean): void {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('voiceModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'voiceModal';
+      modal.className = 'voice-modal';
+      modal.innerHTML = `
+        <div class="voice-modal-content">
+          <div class="voice-modal-icon">🎤</div>
+          <div class="voice-modal-text">Listening...</div>
+          <div class="voice-modal-animation">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+          </div>
+          <button class="voice-modal-stop" onclick="window.noxChatApp.stopVoiceRecording()">Stop</button>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    // Show modal
+    modal.style.display = 'flex';
+    this.isRecording = recording;
+    this.updateMicButtonState();
+
+    console.log('🎤 Voice modal shown');
+  }
+
+  /**
+   * 🎤 Hide voice recording modal
+   */
+  private hideVoiceModal(): void {
+    const modal = document.getElementById('voiceModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+
+    this.isRecording = false;
+    this.updateMicButtonState();
+
+    console.log('🎤 Voice modal hidden');
+  }
+
+  /**
+   * 🎤 Stop voice recording from modal button
+   */
+  public stopVoiceRecording(): void {
+    if (this.isRecording) {
+      // Send stop message to extension
+      this.sendMessage({
+        type: 'stopVoiceRecording'
+      });
+      console.log('🎤 Stop voice recording requested from modal');
     }
   }
 
@@ -613,6 +738,318 @@ class NoxChatApp {
         this.elements.messagesContainer.scrollTop = this.elements.messagesContainer.scrollHeight;
       }
     }, 100);
+  }
+
+  /**
+   * 🎤 Initialize Web Speech API
+   */
+  private initializeSpeechRecognition(): void {
+    // Check for speech recognition support
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      console.log('🎤 Speech recognition not supported in this browser');
+      this.speechSupported = false;
+      if (this.elements.micBtn) {
+        this.elements.micBtn.disabled = true;
+        this.elements.micBtn.title = 'Voice input not supported in this browser';
+      }
+      this.showVoiceError('Voice recognition is not supported in this browser. Please use a Chromium-based browser.', false);
+      return;
+    }
+
+    this.speechSupported = true;
+    this.speechRecognition = new SpeechRecognition();
+
+    // Configure speech recognition
+    this.speechRecognition.continuous = true;
+    this.speechRecognition.interimResults = true;
+    this.speechRecognition.lang = 'en-US';
+
+    // Event handlers
+    this.speechRecognition.onstart = () => {
+      console.log('🎤 Speech recognition started');
+      this.isRecording = true;
+      this.updateMicButtonState();
+    };
+
+    this.speechRecognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Update the input field with the transcript
+      if (this.elements.messageInput) {
+        const currentValue = this.elements.messageInput.value;
+        const newValue = currentValue + finalTranscript;
+        this.elements.messageInput.value = newValue;
+
+        // Show interim results as placeholder
+        if (interimTranscript) {
+          this.elements.messageInput.placeholder = `Listening: "${interimTranscript}"`;
+        }
+
+        this.autoResizeTextarea();
+      }
+    };
+
+    this.speechRecognition.onerror = (event: any) => {
+      console.error('🎤 Speech recognition error:', event.error);
+      this.isRecording = false;
+      this.updateMicButtonState();
+
+      let errorMessage = 'Voice recognition error';
+      let showPermissionButton = false;
+
+      switch (event.error) {
+        case 'no-speech':
+          errorMessage = 'No speech detected. Please try speaking clearly and try again.';
+          break;
+        case 'audio-capture':
+          errorMessage = 'Microphone not accessible. Please check your microphone connection.';
+          showPermissionButton = true;
+          this.permissionState = 'denied';
+          break;
+        case 'not-allowed':
+          errorMessage = '🔒 Microphone blocked by VS Code security. Click "Enable Microphone" for solutions.';
+          showPermissionButton = true;
+          this.permissionState = 'denied';
+          break;
+        case 'network':
+          errorMessage = 'Network error during voice recognition. Please check your connection.';
+          break;
+        case 'service-not-allowed':
+          errorMessage = 'Speech recognition service not available. Please try again later.';
+          break;
+        default:
+          errorMessage = `Voice recognition failed: ${event.error}. Please try again.`;
+      }
+
+      this.showVoiceError(errorMessage, showPermissionButton);
+    };
+
+    this.speechRecognition.onend = () => {
+      console.log('🎤 Speech recognition ended');
+      this.isRecording = false;
+      this.updateMicButtonState();
+
+      // Reset placeholder
+      if (this.elements.messageInput) {
+        this.elements.messageInput.placeholder = 'Ask Nox anything about your code...';
+      }
+    };
+
+    console.log('🎤 Speech recognition initialized successfully');
+
+    // Check if we're in VS Code webview and warn about limitations
+    if (typeof acquireVsCodeApi !== 'undefined') {
+      console.log('🎤 Running in VS Code webview - microphone access may be limited');
+    }
+  }
+
+  /**
+   * 🎤 Toggle voice recording - Simple approach via extension backend
+   */
+  private async toggleVoiceRecording(): Promise<void> {
+    // Hide any previous error messages
+    this.hideVoiceError();
+
+    if (this.isRecording) {
+      // Stop recording
+      this.sendMessage({
+        type: 'stopVoiceRecording'
+      });
+      console.log('🎤 Stopping voice recording via extension');
+    } else {
+      // Start simple voice recording via extension
+      this.startSimpleVoiceRecording();
+    }
+  }
+
+  /**
+   * 🎤 Update microphone button visual state
+   */
+  private updateMicButtonState(): void {
+    if (!this.elements.micBtn) return;
+
+    if (this.isRecording) {
+      this.elements.micBtn.classList.add('recording');
+      this.elements.micBtn.title = 'Stop recording (click to stop)';
+    } else {
+      this.elements.micBtn.classList.remove('recording');
+      if (this.permissionState === 'denied') {
+        this.elements.micBtn.title = 'Microphone permission denied - click to enable';
+      } else {
+        this.elements.micBtn.title = 'Voice input (click to start recording)';
+      }
+    }
+  }
+
+  /**
+   * 🎤 Show voice recognition error with professional UI
+   */
+  private showVoiceError(message: string, showPermissionButton: boolean = false): void {
+    console.error('🎤 Voice error:', message);
+
+    if (!this.elements.voiceError) return;
+
+    const errorText = this.elements.voiceError.querySelector('.error-text');
+    const errorAction = this.elements.voiceError.querySelector('.error-action') as HTMLButtonElement;
+
+    if (errorText) {
+      errorText.textContent = message;
+    }
+
+    if (errorAction) {
+      if (showPermissionButton) {
+        errorAction.style.display = 'block';
+        errorAction.textContent = 'Enable Microphone';
+        errorAction.onclick = () => this.requestMicrophonePermission();
+      } else {
+        errorAction.style.display = 'none';
+      }
+    }
+
+    this.elements.voiceError.style.display = 'block';
+
+    // Auto-hide non-permission errors after 5 seconds
+    if (!showPermissionButton) {
+      setTimeout(() => {
+        this.hideVoiceError();
+      }, 5000);
+    }
+  }
+
+  /**
+   * 🎤 Hide voice error message
+   */
+  private hideVoiceError(): void {
+    if (this.elements.voiceError) {
+      this.elements.voiceError.style.display = 'none';
+    }
+  }
+
+  /**
+   * 🎤 Request microphone permission explicitly
+   */
+  private async requestMicrophonePermission(): Promise<void> {
+    try {
+      console.log('🎤 Requesting microphone permission...');
+
+      // Show immediate feedback
+      this.showVoiceError('🎤 Attempting to enable microphone access...', false);
+
+      // Method 1: Try getUserMedia with explicit permission request
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          console.log('🎤 Trying getUserMedia with explicit permission...');
+
+          // Request permission explicitly
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
+
+          // Permission granted - clean up the stream
+          stream.getTracks().forEach(track => track.stop());
+
+          this.permissionState = 'granted';
+          this.hideVoiceError();
+          this.updateMicButtonState();
+
+          console.log('🎤 Microphone permission granted via getUserMedia');
+          this.showVoiceError('✅ Microphone access granted! Click the microphone button to start voice input.', false);
+
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => this.hideVoiceError(), 3000);
+          return;
+
+        } catch (userMediaError: any) {
+          console.log('🎤 getUserMedia failed:', userMediaError.name, userMediaError.message);
+
+          if (userMediaError.name === 'NotAllowedError') {
+            // VS Code blocks webview microphone - use simple approach
+            this.showVoiceError('🔒 VS Code blocks microphone in webviews. Using extension backend instead...', false);
+            this.startSimpleVoiceRecording();
+            return;
+          }
+        }
+      }
+
+      // Method 2: Try direct speech recognition permission test
+      if (this.speechRecognition) {
+        try {
+          console.log('🎤 Testing speech recognition permission...');
+
+          // Create a promise to handle the permission test
+          const permissionTest = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Permission test timeout'));
+            }, 2000);
+
+            this.speechRecognition.onstart = () => {
+              clearTimeout(timeout);
+              this.speechRecognition.stop();
+              resolve('granted');
+            };
+
+            this.speechRecognition.onerror = (event: any) => {
+              clearTimeout(timeout);
+              reject(event);
+            };
+
+            this.speechRecognition.start();
+          });
+
+          await permissionTest;
+
+          this.permissionState = 'granted';
+          this.hideVoiceError();
+          this.updateMicButtonState();
+
+          console.log('🎤 Speech recognition permission test passed');
+          this.showVoiceError('✅ Voice recognition enabled! Click the microphone button to start.', false);
+
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => this.hideVoiceError(), 3000);
+          return;
+
+        } catch (speechError: any) {
+          console.log('🎤 Speech recognition permission test failed:', speechError);
+        }
+      }
+
+      // Method 3: Use simple voice recording via extension
+      this.showVoiceError('🔒 VS Code blocks microphone in webviews. Using extension backend instead...', false);
+      this.startSimpleVoiceRecording();
+
+    } catch (error: any) {
+      console.error('🎤 Permission request failed:', error);
+      this.showVoiceError('🔒 VS Code blocks microphone in webviews. Using extension backend instead...', false);
+      this.startSimpleVoiceRecording();
+    }
+  }
+
+  /**
+   * 🎤 Start simple voice recording via extension backend
+   */
+  private startSimpleVoiceRecording(): void {
+    // Send message to extension to start voice recording
+    this.sendMessage({
+      type: 'startVoiceRecording'
+    });
+    console.log('🎤 Starting simple voice recording via extension');
   }
 }
 

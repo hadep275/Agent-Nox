@@ -359,6 +359,17 @@ class NoxExtension {
             case "resetExtension":
               await this.resetExtension();
               break;
+            case "getVoiceStatus":
+              await this.sendVoiceStatus(panel.webview);
+              break;
+            case "setVoiceSettings":
+              await this.setVoiceSettings(message.settings);
+              await this.sendVoiceStatus(panel.webview);
+              break;
+            case "setGoogleApiKey":
+              await this.setGoogleApiKey(message.apiKey);
+              await this.sendVoiceStatus(panel.webview);
+              break;
             default:
               this.logger.warn(
                 `Unknown settings message type: ${message.type}`
@@ -649,6 +660,7 @@ class NoxExtension {
                 <ul class="settings-nav">
                     <li><button class="nav-btn active" data-section="api-keys">🔑 API Keys</button></li>
                     <li><button class="nav-btn" data-section="providers">🤖 AI Providers</button></li>
+                    <li><button class="nav-btn" data-section="voice">🎤 Voice Input</button></li>
                     <li><button class="nav-btn" data-section="theme">🎨 Theme</button></li>
                     <li><button class="nav-btn" data-section="performance">📊 Performance</button></li>
                     <li><button class="nav-btn" data-section="help">📖 Help & Documentation</button></li>
@@ -672,6 +684,64 @@ class NoxExtension {
                     <p>Switch between different AI providers and models.</p>
                     <div class="provider-grid" id="providersGrid">
                         <!-- Provider cards will be populated here -->
+                    </div>
+                </div>
+
+                <div id="voice" class="section">
+                    <h2>🎤 Voice Input</h2>
+                    <p>Configure voice-to-text settings for hands-free coding.</p>
+
+                    <div class="provider-card">
+                        <h3>🎤 Voice Input Settings</h3>
+                        <div style="margin: 16px 0;">
+                            <label style="display: flex; align-items: center; margin-bottom: 12px;">
+                                <input type="checkbox" id="voiceEnabled" style="margin-right: 8px;">
+                                <span>Enable voice input</span>
+                            </label>
+                        </div>
+
+                        <div style="margin: 16px 0;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Voice Engine:</label>
+                            <select id="voiceEngine" style="width: 100%; padding: 8px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px;">
+                                <option value="free">🆓 Free (Vosk - 100% offline)</option>
+                                <option value="openai">🤖 OpenAI Whisper (uses your OpenAI API key)</option>
+                                <option value="google">🌐 Google Speech (requires separate API key)</option>
+                            </select>
+                            <!-- Dynamic note that shows based on selected engine -->
+                            <div id="voiceEngineNote" style="margin-top: 8px; padding: 8px; background: #1a1a1a; border-radius: 4px; font-size: 12px; color: #888; display: none;">
+                                <!-- Content will be dynamically updated -->
+                            </div>
+                        </div>
+
+                        <div id="googleApiKeySection" style="margin: 16px 0; display: none;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Google Cloud API Key:</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="password" id="googleApiKey" placeholder="Enter Google Cloud API key..."
+                                       style="flex: 1; padding: 8px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px;">
+                                <button id="saveGoogleApiKey" class="btn">Save</button>
+                            </div>
+                        </div>
+
+                        <div style="margin: 16px 0;">
+                            <h4>Engine Status:</h4>
+                            <div id="voiceEngineStatus" style="margin-top: 8px;">
+                                <div style="display: flex; align-items: center; margin: 4px 0;">
+                                    <span id="freeStatus" style="margin-right: 8px;">🆓 Free (Vosk):</span>
+                                    <span style="color: #4CAF50;">✅ Always available</span>
+                                </div>
+                                <div style="display: flex; align-items: center; margin: 4px 0;">
+                                    <span id="openaiStatus" style="margin-right: 8px;">🤖 OpenAI Whisper:</span>
+                                    <span id="openaiStatusText" style="color: #f44336;">❌ No OpenAI API key</span>
+                                    <span style="margin-left: 8px; font-size: 11px; color: #666;">(Set in API Keys section)</span>
+                                </div>
+                                <div style="display: flex; align-items: center; margin: 4px 0;">
+                                    <span id="googleStatus" style="margin-right: 8px;">🌐 Google Speech:</span>
+                                    <span id="googleStatusText" style="color: #f44336;">❌ No Google API key</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button id="saveVoiceSettings" class="btn" style="margin-top: 16px;">Save Voice Settings</button>
                     </div>
                 </div>
 
@@ -1102,7 +1172,131 @@ class NoxExtension {
                             });
                         }
                         break;
+
+                    case 'voiceStatus':
+                        // Update voice settings status
+                        if (message.status) {
+                            updateVoiceStatus(message.status);
+                        }
+                        break;
                 }
+            });
+
+            // Voice Settings Functions
+            function initializeVoiceSettings() {
+                const voiceEngineSelect = document.getElementById('voiceEngine');
+                const googleApiKeySection = document.getElementById('googleApiKeySection');
+
+                // Show/hide Google API key section and dynamic notes based on engine selection
+                voiceEngineSelect.addEventListener('change', () => {
+                    const selectedEngine = voiceEngineSelect.value;
+                    const voiceEngineNote = document.getElementById('voiceEngineNote');
+
+                    // Show/hide Google API key section
+                    if (selectedEngine === 'google') {
+                        googleApiKeySection.style.display = 'block';
+                    } else {
+                        googleApiKeySection.style.display = 'none';
+                    }
+
+                    // Show dynamic note based on selected engine
+                    if (selectedEngine === 'free') {
+                        voiceEngineNote.style.display = 'none';
+                    } else if (selectedEngine === 'openai') {
+                        voiceEngineNote.style.display = 'block';
+                        voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> OpenAI Whisper uses your existing OpenAI API key from the "🔑 API Keys" section and charges ~$0.006 per minute.';
+                        voiceEngineNote.style.color = '#888';
+                    } else if (selectedEngine === 'google') {
+                        voiceEngineNote.style.display = 'block';
+                        voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> Google Speech requires a separate Google Cloud API key. Enter it below to enable this engine.';
+                        voiceEngineNote.style.color = '#888';
+                    }
+                });
+
+                // Save voice settings
+                document.getElementById('saveVoiceSettings').addEventListener('click', () => {
+                    const enabled = document.getElementById('voiceEnabled').checked;
+                    const engine = document.getElementById('voiceEngine').value;
+
+                    vscode.postMessage({
+                        type: 'setVoiceSettings',
+                        settings: { enabled, engine }
+                    });
+                });
+
+                // Save Google API key
+                document.getElementById('saveGoogleApiKey').addEventListener('click', () => {
+                    const googleApiKey = document.getElementById('googleApiKey').value;
+                    if (googleApiKey.trim()) {
+                        vscode.postMessage({
+                            type: 'setGoogleApiKey',
+                            apiKey: googleApiKey.trim()
+                        });
+                        document.getElementById('googleApiKey').value = '';
+                    }
+                });
+
+                // Request current voice status
+                vscode.postMessage({ type: 'getVoiceStatus' });
+            }
+
+            function updateVoiceStatus(status) {
+                // Update checkboxes and selects
+                document.getElementById('voiceEnabled').checked = status.enabled;
+                document.getElementById('voiceEngine').value = status.engine;
+
+                // Show/hide Google API key section and dynamic notes
+                const googleApiKeySection = document.getElementById('googleApiKeySection');
+                const voiceEngineNote = document.getElementById('voiceEngineNote');
+
+                if (status.engine === 'google') {
+                    googleApiKeySection.style.display = 'block';
+                } else {
+                    googleApiKeySection.style.display = 'none';
+                }
+
+                // Show dynamic note based on current engine
+                if (status.engine === 'free') {
+                    voiceEngineNote.style.display = 'none';
+                } else if (status.engine === 'openai') {
+                    voiceEngineNote.style.display = 'block';
+                    voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> OpenAI Whisper uses your existing OpenAI API key from the "🔑 API Keys" section and charges ~$0.006 per minute.';
+                    voiceEngineNote.style.color = '#888';
+                } else if (status.engine === 'google') {
+                    voiceEngineNote.style.display = 'block';
+                    if (status.engines.google) {
+                        voiceEngineNote.innerHTML = '<strong>✅ Google Speech is configured and ready to use.</strong>';
+                        voiceEngineNote.style.color = '#4CAF50';
+                    } else {
+                        voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> Google Speech requires a separate Google Cloud API key. Enter it below to enable this engine.';
+                        voiceEngineNote.style.color = '#888';
+                    }
+                }
+
+                // Update engine status indicators
+                const openaiStatusText = document.getElementById('openaiStatusText');
+                const googleStatusText = document.getElementById('googleStatusText');
+
+                if (status.engines.openai) {
+                    openaiStatusText.textContent = '✅ Available (using OpenAI key)';
+                    openaiStatusText.style.color = '#4CAF50';
+                } else {
+                    openaiStatusText.textContent = '❌ No OpenAI API key';
+                    openaiStatusText.style.color = '#f44336';
+                }
+
+                if (status.engines.google) {
+                    googleStatusText.textContent = '✅ Available';
+                    googleStatusText.style.color = '#4CAF50';
+                } else {
+                    googleStatusText.textContent = '❌ No Google API key';
+                    googleStatusText.style.color = '#f44336';
+                }
+            }
+
+            // Initialize voice settings when page loads
+            window.addEventListener('load', () => {
+                initializeVoiceSettings();
             });
         </script>
     </body>
@@ -1126,6 +1320,122 @@ class NoxExtension {
       webview.postMessage({ type: "providerStatus", status });
     } catch (error) {
       this.logger.error("Error sending provider status:", error);
+    }
+  }
+
+  /**
+   * 🎤 Send voice status to settings panel
+   */
+  async sendVoiceStatus(webview) {
+    try {
+      // Get voice settings from workspace state
+      const voiceSettings = this.context.workspaceState.get(
+        "nox.voiceSettings",
+        {
+          enabled: true,
+          engine: "free",
+          googleApiKey: "",
+        }
+      );
+
+      // Check engine availability
+      const engines = {
+        free: true, // Always available
+        openai: await this.agentController.aiClient.hasValidApiKey("openai"),
+        google: !!voiceSettings.googleApiKey,
+      };
+
+      const status = {
+        enabled: voiceSettings.enabled,
+        engine: voiceSettings.engine,
+        engines: engines,
+      };
+
+      webview.postMessage({ type: "voiceStatus", status });
+    } catch (error) {
+      this.logger.error("Error sending voice status:", error);
+    }
+  }
+
+  /**
+   * 🎤 Set voice settings
+   */
+  async setVoiceSettings(settings) {
+    try {
+      // Get current settings
+      const currentSettings = this.context.workspaceState.get(
+        "nox.voiceSettings",
+        {
+          enabled: true,
+          engine: "free",
+          googleApiKey: "",
+        }
+      );
+
+      // Update with new settings
+      const updatedSettings = { ...currentSettings, ...settings };
+
+      // Save to workspace state
+      await this.context.workspaceState.update(
+        "nox.voiceSettings",
+        updatedSettings
+      );
+
+      // Update voice recording service if it exists
+      if (
+        this.chatSidebarProvider &&
+        this.chatSidebarProvider.voiceRecordingService
+      ) {
+        await this.chatSidebarProvider.voiceRecordingService.updateVoiceSettings(
+          updatedSettings
+        );
+      }
+
+      this.logger.info("🎤 Voice settings updated:", updatedSettings);
+    } catch (error) {
+      this.logger.error("Error setting voice settings:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🎤 Set Google API key for voice
+   */
+  async setGoogleApiKey(apiKey) {
+    try {
+      // Get current settings
+      const currentSettings = this.context.workspaceState.get(
+        "nox.voiceSettings",
+        {
+          enabled: true,
+          engine: "free",
+          googleApiKey: "",
+        }
+      );
+
+      // Update Google API key
+      currentSettings.googleApiKey = apiKey;
+
+      // Save to workspace state
+      await this.context.workspaceState.update(
+        "nox.voiceSettings",
+        currentSettings
+      );
+
+      // Update voice recording service if it exists
+      if (
+        this.chatSidebarProvider &&
+        this.chatSidebarProvider.voiceRecordingService
+      ) {
+        await this.chatSidebarProvider.voiceRecordingService.updateVoiceSettings(
+          currentSettings
+        );
+      }
+
+      this.logger.info("🎤 Google API key updated for voice");
+    } catch (error) {
+      this.logger.error("Error setting Google API key:", error);
+      throw error;
     }
   }
 

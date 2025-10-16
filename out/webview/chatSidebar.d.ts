@@ -8,6 +8,7 @@ declare class NoxChatViewProvider {
     context: any;
     agentController: any;
     logger: any;
+    voiceRecordingService: VoiceRecordingService;
     webviewView: any;
     disposables: any[];
     chatHistory: any[];
@@ -92,5 +93,14 @@ declare class NoxChatViewProvider {
      * 🔄 Update toggle button icon based on collapsed state
      */
     updateToggleButtonIcon(collapsed: any): Promise<void>;
+    /**
+     * 🎤 Start voice recording via extension backend
+     */
+    startVoiceRecording(): Promise<void>;
+    /**
+     * 🎤 Stop voice recording
+     */
+    stopVoiceRecording(): Promise<void>;
 }
+import VoiceRecordingService = require("../core/voiceRecordingService");
 //# sourceMappingURL=chatSidebar.d.ts.map

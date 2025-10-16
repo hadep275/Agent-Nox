@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const VoiceRecordingService = require("../core/voiceRecordingService");
 
 /**
  * 🦊 Nox Chat Sidebar - WebviewViewProvider for Sidebar Integration
@@ -9,6 +10,9 @@ class NoxChatViewProvider {
     this.context = context;
     this.agentController = agentController;
     this.logger = logger;
+
+    // Initialize voice recording service
+    this.voiceRecordingService = new VoiceRecordingService(logger, context);
     this.webviewView = null;
     this.disposables = [];
     this.chatHistory = [];
@@ -25,6 +29,12 @@ class NoxChatViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [this.context.extensionUri],
+      enableCommandUris: true,
+      retainContextWhenHidden: true,
+      // Enable forms for potential file uploads
+      enableForms: true,
+      // Allow unsafe inline for media handling
+      enableFindWidget: true,
     };
 
     // Set initial content
@@ -106,6 +116,20 @@ class NoxChatViewProvider {
             case "providerSectionToggled":
               // Update the toggle button icon based on collapsed state
               await this.updateToggleButtonIcon(message.collapsed);
+              break;
+
+            case "startVoiceRecording":
+              // Start simple voice recording via extension backend
+              this.logger.info(
+                "🎤 Starting voice recording via extension backend"
+              );
+              await this.startVoiceRecording();
+              break;
+
+            case "stopVoiceRecording":
+              // Stop voice recording
+              this.logger.info("🎤 Stopping voice recording");
+              await this.stopVoiceRecording();
               break;
 
             default:
@@ -454,7 +478,8 @@ class NoxChatViewProvider {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' ${this.webviewView.webview.cspSource} 'unsafe-eval'; font-src https:;">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' ${this.webviewView.webview.cspSource} 'unsafe-eval'; font-src https:; media-src * data: blob:;">
+        <meta http-equiv="Permissions-Policy" content="microphone=*, camera=*, geolocation=*">
         <title>🦊 Nox Chat</title>
         <!-- Styles are now bundled with webpack -->
     </head>
@@ -511,10 +536,32 @@ class NoxChatViewProvider {
             <!-- Input Area -->
             <div class="input-container">
                 <div class="input-wrapper">
-                    <textarea id="messageInput" class="message-input" placeholder="Ask Nox anything about your code..." rows="1"></textarea>
+                    <div class="input-field-container">
+                        <textarea id="messageInput" class="message-input" placeholder="Ask Nox anything about your code..." rows="1"></textarea>
+                        <button id="micBtn" class="mic-button-inline" title="Voice input (click to start/stop recording)">
+                            <svg class="mic-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                        </button>
+                    </div>
                     <button id="sendBtn" class="send-button" title="Send message">
                         <span class="send-icon">🚀</span>
                     </button>
+                </div>
+                <!-- Voice Error Display -->
+                <div id="voiceError" class="voice-error-message" style="display: none;">
+                    <div class="error-content">
+                        <svg class="error-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                        <span class="error-text"></span>
+                        <button class="error-action" style="display: none;">Enable Microphone</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -599,6 +646,96 @@ class NoxChatViewProvider {
       // The icon animation would need to be handled in CSS within the webview
     } catch (error) {
       this.logger.error("Error updating toggle button icon:", error);
+    }
+  }
+
+  /**
+   * 🎤 Start voice recording via extension backend
+   */
+  async startVoiceRecording() {
+    try {
+      this.logger.info("🎤 Starting voice recording...");
+
+      // Check voice settings first
+      const status = this.voiceRecordingService.getRecordingStatus();
+
+      if (!status.voiceEnabled) {
+        // Voice is disabled in settings
+        this.webviewView.webview.postMessage({
+          type: "showVoiceError",
+          message: "Voice input is disabled. Enable it in Nox Settings.",
+          showSettingsButton: true,
+        });
+        return;
+      }
+
+      // Show recording modal in webview
+      this.webviewView.webview.postMessage({
+        type: "showVoiceModal",
+        recording: true,
+      });
+
+      // Start actual voice recording
+      const result = await this.voiceRecordingService.startRecording();
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      this.logger.info("🎤 Voice recording started successfully");
+    } catch (error) {
+      this.logger.error("🎤 Voice recording failed:", error);
+
+      // Show error and hide modal
+      this.webviewView.webview.postMessage({
+        type: "hideVoiceModal",
+      });
+
+      // Show error message
+      vscode.window.showErrorMessage(
+        `🎤 Voice recording failed: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * 🎤 Stop voice recording
+   */
+  async stopVoiceRecording() {
+    try {
+      this.logger.info("🎤 Stopping voice recording...");
+
+      // Stop recording and get transcription
+      const result = await this.voiceRecordingService.stopRecording();
+
+      // Hide recording modal
+      this.webviewView.webview.postMessage({
+        type: "hideVoiceModal",
+      });
+
+      if (result.success && result.text) {
+        // Insert transcribed text into input field
+        this.webviewView.webview.postMessage({
+          type: "insertVoiceText",
+          text: result.text,
+        });
+
+        this.logger.info(`🎤 Voice transcription completed: "${result.text}"`);
+      } else {
+        throw new Error(result.error || "Transcription failed");
+      }
+    } catch (error) {
+      this.logger.error("🎤 Stop recording failed:", error);
+
+      // Hide modal
+      this.webviewView.webview.postMessage({
+        type: "hideVoiceModal",
+      });
+
+      // Show error message
+      vscode.window.showErrorMessage(
+        `🎤 Voice transcription failed: ${error.message}`
+      );
     }
   }
 }
