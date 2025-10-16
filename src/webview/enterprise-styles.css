@@ -597,8 +597,8 @@ body {
 
 .mic-button-inline.recording .stop-icon {
   display: block;
-  color: #860000;
-  /* Bolder, darker red for better visibility */
+  color: #ff0000;
+  /* Bright red stop button - should be very visible now */
 }
 
 /* Button animation removed - using static icons with pulsing dots animation instead */
