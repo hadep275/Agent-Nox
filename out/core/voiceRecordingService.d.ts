@@ -108,14 +108,22 @@ declare class VoiceRecordingService {
      */
     stopRecording(): Promise<{
         success: boolean;
+        transcription: string;
+        message: string;
+        text?: undefined;
+        error?: undefined;
+    } | {
+        success: boolean;
         text: any;
         message: string;
+        transcription?: undefined;
         error?: undefined;
     } | {
         success: boolean;
         error: any;
-        text?: undefined;
+        transcription?: undefined;
         message?: undefined;
+        text?: undefined;
     }>;
     /**
      * Transcribe audio file to text using selected engine

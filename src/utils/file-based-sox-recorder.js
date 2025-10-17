@@ -98,8 +98,12 @@ class FileBasedSoxRecorder extends EventEmitter {
             console.log(`✅ Recording completed: ${stats.size} bytes`);
             this.emit("completed", this.tempFile);
           } else {
-            console.error("❌ Recording file was not created");
-            this.emit("error", new Error("Recording file was not created"));
+            // File not created - this happens when recording is stopped too quickly
+            // or no audio input is detected. This is normal behavior.
+            console.log(
+              "⚠️ No audio file created - recording was too short or no audio detected"
+            );
+            this.emit("completed", null); // Signal completion with no file
           }
         } else {
           console.error(

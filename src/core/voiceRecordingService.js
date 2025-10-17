@@ -341,6 +341,17 @@ class VoiceRecordingService {
 
       this.logger.info(`🎤 Using FileBasedSoxRecorder with SoX: ${soxPath}`);
 
+      // Set up event listeners for automatic completion
+      this.recorder.on("completed", (audioFilePath) => {
+        this.logger.info("🎤 Recording completed automatically");
+        this.handleRecordingCompletion(audioFilePath);
+      });
+
+      this.recorder.on("error", (error) => {
+        this.logger.error("🎤 Recording error:", error);
+        this.handleRecordingError(error);
+      });
+
       // Start recording and get the audio file path (synchronous now)
       this.audioFile = this.recorder.startRecording();
       this.isRecording = true;
@@ -385,38 +396,161 @@ class VoiceRecordingService {
   }
 
   /**
+   * Handle automatic recording completion (when SoX finishes on its own)
+   */
+  async handleRecordingCompletion(audioFilePath) {
+    try {
+      if (!this.isRecording) {
+        this.logger.info(
+          "🎤 Recording completion event received but not currently recording"
+        );
+        return;
+      }
+
+      this.logger.info("🎤 Processing automatic recording completion...");
+      this.isRecording = false;
+
+      if (!audioFilePath || !fs.existsSync(audioFilePath)) {
+        this.logger.info(
+          "🎤 No audio file from automatic completion - recording was too short"
+        );
+        this.resetRecorderState();
+        return;
+      }
+
+      const stats = fs.statSync(audioFilePath);
+      this.logger.info(`🎤 Auto-completed recording: ${stats.size} bytes`);
+
+      // Transcribe the audio
+      const transcription = await this.transcribeAudio(audioFilePath);
+
+      // Send transcription to webview
+      if (this.chatSidebar && this.chatSidebar.webview) {
+        this.chatSidebar.webview.postMessage({
+          type: "voiceTranscriptionComplete",
+          transcription: transcription,
+          success: true,
+        });
+      }
+
+      // Clean up
+      this.cleanupRecording();
+    } catch (error) {
+      this.logger.error(
+        "🎤 Failed to handle automatic recording completion:",
+        error
+      );
+      this.handleRecordingError(error);
+    }
+  }
+
+  /**
+   * Handle recording errors
+   */
+  async handleRecordingError(error) {
+    this.logger.error("🎤 Recording error occurred:", error);
+    this.isRecording = false;
+
+    // Send error to webview
+    if (this.chatSidebar && this.chatSidebar.webview) {
+      this.chatSidebar.webview.postMessage({
+        type: "voiceTranscriptionComplete",
+        error: error.message,
+        success: false,
+      });
+    }
+
+    this.resetRecorderState();
+  }
+
+  /**
+   * Reset recorder state
+   */
+  resetRecorderState() {
+    this.recorder = null;
+    this.audioFile = null;
+    this.isRecording = false;
+  }
+
+  /**
+   * Clean up recording resources
+   */
+  cleanupRecording() {
+    try {
+      if (this.recorder && this.recorder.cleanup) {
+        this.recorder.cleanup();
+        this.logger.info("🎤 FileBasedSoxRecorder cleanup completed");
+      } else if (this.audioFile && fs.existsSync(this.audioFile)) {
+        fs.unlinkSync(this.audioFile);
+        this.logger.info("🎤 Temporary audio file cleaned up");
+      }
+    } catch (cleanupError) {
+      this.logger.warn("🎤 Failed to clean up recording:", cleanupError);
+    }
+
+    this.resetRecorderState();
+  }
+
+  /**
    * Wait for FileBasedSoxRecorder to complete recording
    */
   async waitForRecordingCompletion() {
-    if (!this.recorder || !this.recorder.soxProcess) {
-      return;
+    if (!this.recorder) {
+      return null;
     }
 
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Recording completion timeout after 10 seconds"));
-      }, 10000);
+    // For FileBasedSoxRecorder, use event-based completion
+    if (this.recorder.emit && this.recorder.on) {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Recording completion timeout after 10 seconds"));
+        }, 10000);
 
-      // Listen for SoX process to exit
-      this.recorder.soxProcess.on("close", (code, signal) => {
-        clearTimeout(timeout);
-        // Accept both normal exit (code 0) and SIGTERM termination (code null)
-        if (code === 0 || code === null || signal === "SIGTERM") {
-          // Wait a bit more for file system to flush
-          setTimeout(resolve, 500);
-        } else {
-          reject(
-            new Error(`SoX process exited with code ${code}, signal ${signal}`)
-          );
+        // Listen for completion event from FileBasedSoxRecorder
+        this.recorder.once("completed", (audioFilePath) => {
+          clearTimeout(timeout);
+          resolve(audioFilePath); // Will be null if no file was created
+        });
+
+        this.recorder.once("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+    }
+
+    // Fallback for legacy recorders - listen to SoX process directly
+    if (this.recorder.soxProcess) {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Recording completion timeout after 10 seconds"));
+        }, 10000);
+
+        // Listen for SoX process to exit
+        this.recorder.soxProcess.on("close", (code, signal) => {
+          clearTimeout(timeout);
+          // Accept both normal exit (code 0) and SIGTERM termination (code null)
+          if (code === 0 || code === null || signal === "SIGTERM") {
+            // Wait a bit more for file system to flush
+            setTimeout(() => resolve(null), 500);
+          } else {
+            reject(
+              new Error(
+                `SoX process exited with code ${code}, signal ${signal}`
+              )
+            );
+          }
+        });
+
+        // If process already exited, resolve immediately
+        if (this.recorder.soxProcess.exitCode !== null) {
+          clearTimeout(timeout);
+          setTimeout(() => resolve(null), 500);
         }
       });
+    }
 
-      // If process already exited, resolve immediately
-      if (this.recorder.soxProcess.exitCode !== null) {
-        clearTimeout(timeout);
-        setTimeout(resolve, 500);
-      }
-    });
+    return null;
   }
 
   /**
@@ -535,16 +669,49 @@ class VoiceRecordingService {
       this.isRecording = false;
 
       // Wait for SoX process to finish and file to be written
-      await this.waitForRecordingCompletion();
+      const recordingResult = await this.waitForRecordingCompletion();
 
       // Check if audio file exists and has content
       if (!fs.existsSync(this.audioFile)) {
-        throw new Error("Recording file was not created");
+        // This is normal when recording is stopped too quickly or no audio detected
+        this.logger.info(
+          "🎤 No audio file created - recording was too short or no audio detected"
+        );
+
+        // Reset recorder state
+        this.recorder = null;
+        this.audioFile = null;
+
+        return {
+          success: false,
+          transcription: "",
+          message:
+            "Recording was too short or no audio was detected. Please try speaking for at least 1-2 seconds.",
+        };
       }
 
       const stats = fs.statSync(this.audioFile);
       if (stats.size === 0) {
-        throw new Error("Audio file is empty");
+        this.logger.info("🎤 Audio file is empty - no audio detected");
+
+        // Clean up empty file and reset state
+        try {
+          fs.unlinkSync(this.audioFile);
+        } catch (cleanupError) {
+          this.logger.warn(
+            "🎤 Failed to clean up empty audio file:",
+            cleanupError
+          );
+        }
+        this.recorder = null;
+        this.audioFile = null;
+
+        return {
+          success: false,
+          transcription: "",
+          message:
+            "No audio was detected. Please check your microphone and try again.",
+        };
       }
 
       this.logger.info(
@@ -569,6 +736,10 @@ class VoiceRecordingService {
         this.logger.warn("🎤 Failed to clean up audio file:", cleanupError);
       }
 
+      // Reset recorder state after successful completion
+      this.recorder = null;
+      this.audioFile = null;
+
       return {
         success: true,
         text: transcription,
@@ -576,6 +747,9 @@ class VoiceRecordingService {
       };
     } catch (error) {
       this.logger.error("🎤 Failed to stop recording:", error);
+
+      // CRITICAL: Reset recording state on error to prevent "already in progress" issues
+      this.isRecording = false;
 
       // Clean up on error
       try {
@@ -592,6 +766,10 @@ class VoiceRecordingService {
           cleanupError
         );
       }
+
+      // Reset recorder instance
+      this.recorder = null;
+      this.audioFile = null;
 
       return {
         success: false,
