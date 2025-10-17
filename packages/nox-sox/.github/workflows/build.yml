@@ -1,0 +1,129 @@
+name: Build Platform-Specific Packages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            npm_config_arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: arm64
+            npm_config_arch: arm
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            npm_config_arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+            npm_config_arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: armhf
+            npm_config_arch: arm
+          - os: ubuntu-latest
+            platform: alpine
+            arch: x64
+            npm_config_arch: x64
+          - os: ubuntu-latest
+            platform: alpine
+            arch: arm64
+            npm_config_arch: arm64
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+            npm_config_arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            npm_config_arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install
+        env:
+          npm_config_arch: ${{ matrix.npm_config_arch }}
+
+      - name: Download SoX binaries
+        run: npm run postinstall
+
+      - name: Test package
+        run: node test.js
+
+      - name: Create platform-specific package
+        run: |
+          # Create platform-specific package.json
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = 'nox-sox-${{ matrix.platform }}-${{ matrix.arch }}';
+            pkg.main = 'index.js';
+            delete pkg.optionalDependencies;
+            delete pkg.scripts.postinstall;
+            require('fs').writeFileSync('package-platform.json', JSON.stringify(pkg, null, 2));
+          "
+
+      - name: Package for platform
+        run: npm pack --package-json package-platform.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nox-sox-${{ matrix.platform }}-${{ matrix.arch }}
+          path: "*.tgz"
+
+  publish:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Publish to npm
+        run: |
+          # Publish main package
+          npm publish
+          
+          # Publish platform-specific packages
+          for dir in nox-sox-*; do
+            if [ -d "$dir" ]; then
+              cd "$dir"
+              npm publish *.tgz
+              cd ..
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

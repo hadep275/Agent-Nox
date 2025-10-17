@@ -5,8 +5,8 @@ declare class VoiceRecordingService {
     context: any;
     recorder: any;
     isRecording: boolean;
-    audioFile: string | null;
-    speechClient: any;
+    audioFile: any;
+    speechClient: import("@google-cloud/speech/build/src/v1").SpeechClient | null;
     openai: any;
     voiceSettings: any;
     /**
@@ -35,12 +35,74 @@ declare class VoiceRecordingService {
     startRecording(): Promise<{
         success: boolean;
         message: string;
-        error?: undefined;
     } | {
         success: boolean;
         error: any;
-        message?: undefined;
+        suggestion: {
+            title: string;
+            message: string;
+            actions: {
+                platform: string;
+                instruction: string;
+                command: string;
+            }[];
+            alternative: string;
+        };
     }>;
+    /**
+     * 🔍 Detect available recording capabilities (Enterprise-grade)
+     */
+    detectRecordingCapability(): Promise<{
+        available: boolean;
+        method: string;
+        recorderClass: typeof import("../utils/file-based-sox-recorder");
+        soxPath: string;
+        error?: undefined;
+    } | {
+        available: boolean;
+        error: string;
+        method?: undefined;
+        recorderClass?: undefined;
+        soxPath?: undefined;
+    }>;
+    /**
+     * 🎤 Start recording with specific method
+     */
+    startRecordingWithMethod(method: any, recorderClass?: null, soxPath?: null): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    /**
+     * 🎤 Start recording using node-record-lpcm16 with bundled SoX (Enterprise method)
+     */
+    startNodeRecording(record: any, soxPath?: null): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    /**
+     * 🎤 Start recording using FileBasedSoxRecorder (Enterprise method)
+     */
+    startFileBasedRecording(RecorderClass: any, soxPath?: null): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    /**
+     * Wait for FileBasedSoxRecorder to complete recording
+     */
+    waitForRecordingCompletion(): Promise<any>;
+    /**
+     * 🎯 Get user-friendly recording suggestions (Enterprise UX)
+     */
+    getRecordingSuggestion(errorMessage: any): {
+        title: string;
+        message: string;
+        actions: {
+            platform: string;
+            instruction: string;
+            command: string;
+        }[];
+        alternative: string;
+    };
     /**
      * Stop recording and transcribe audio
      */

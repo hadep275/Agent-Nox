@@ -370,6 +370,10 @@ class NoxExtension {
               await this.setGoogleApiKey(message.apiKey);
               await this.sendVoiceStatus(panel.webview);
               break;
+            case "setAzureApiKey":
+              await this.setAzureApiKey(message.apiKey, message.region);
+              await this.sendVoiceStatus(panel.webview);
+              break;
             default:
               this.logger.warn(
                 `Unknown settings message type: ${message.type}`
@@ -659,7 +663,6 @@ class NoxExtension {
                 <h2>🦊 Nox Settings</h2>
                 <ul class="settings-nav">
                     <li><button class="nav-btn active" data-section="api-keys">🔑 API Keys</button></li>
-                    <li><button class="nav-btn" data-section="providers">🤖 AI Providers</button></li>
                     <li><button class="nav-btn" data-section="voice">🎤 Voice Input</button></li>
                     <li><button class="nav-btn" data-section="theme">🎨 Theme</button></li>
                     <li><button class="nav-btn" data-section="performance">📊 Performance</button></li>
@@ -679,14 +682,6 @@ class NoxExtension {
                     </div>
                 </div>
 
-                <div id="providers" class="section">
-                    <h2>🤖 AI Providers</h2>
-                    <p>Switch between different AI providers and models.</p>
-                    <div class="provider-grid" id="providersGrid">
-                        <!-- Provider cards will be populated here -->
-                    </div>
-                </div>
-
                 <div id="voice" class="section">
                     <h2>🎤 Voice Input</h2>
                     <p>Configure voice-to-text settings for hands-free coding.</p>
@@ -703,9 +698,10 @@ class NoxExtension {
                         <div style="margin: 16px 0;">
                             <label style="display: block; margin-bottom: 8px; font-weight: bold;">Voice Engine:</label>
                             <select id="voiceEngine" style="width: 100%; padding: 8px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px;">
-                                <option value="free">🆓 Free (Vosk - 100% offline)</option>
-                                <option value="openai">🤖 OpenAI Whisper (uses your OpenAI API key)</option>
-                                <option value="google">🌐 Google Speech (requires separate API key)</option>
+                                <option value="openai">🤖 OpenAI Whisper (Recommended)</option>
+                                <option value="google">🌐 Google Speech</option>
+                                <option value="azure">☁️ Azure Speech</option>
+                                <option value="free" disabled>🆓 Vosk (Advanced Setup Required)</option>
                             </select>
                             <!-- Dynamic note that shows based on selected engine -->
                             <div id="voiceEngineNote" style="margin-top: 8px; padding: 8px; background: #1a1a1a; border-radius: 4px; font-size: 12px; color: #888; display: none;">
@@ -722,13 +718,23 @@ class NoxExtension {
                             </div>
                         </div>
 
+                        <div id="azureApiKeySection" style="margin: 16px 0; display: none;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Azure Speech API Key:</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="password" id="azureApiKey" placeholder="Enter Azure Speech API key..."
+                                       style="flex: 1; padding: 8px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px;">
+                                <button id="saveAzureApiKey" class="btn">Save</button>
+                            </div>
+                            <div style="margin-top: 8px;">
+                                <label style="display: block; margin-bottom: 4px; font-size: 12px; color: #888;">Azure Region (e.g., eastus, westus2):</label>
+                                <input type="text" id="azureRegion" placeholder="eastus"
+                                       style="width: 100%; padding: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px; font-size: 12px;">
+                            </div>
+                        </div>
+
                         <div style="margin: 16px 0;">
                             <h4>Engine Status:</h4>
                             <div id="voiceEngineStatus" style="margin-top: 8px;">
-                                <div style="display: flex; align-items: center; margin: 4px 0;">
-                                    <span id="freeStatus" style="margin-right: 8px;">🆓 Free (Vosk):</span>
-                                    <span style="color: #4CAF50;">✅ Always available</span>
-                                </div>
                                 <div style="display: flex; align-items: center; margin: 4px 0;">
                                     <span id="openaiStatus" style="margin-right: 8px;">🤖 OpenAI Whisper:</span>
                                     <span id="openaiStatusText" style="color: #f44336;">❌ No OpenAI API key</span>
@@ -737,6 +743,14 @@ class NoxExtension {
                                 <div style="display: flex; align-items: center; margin: 4px 0;">
                                     <span id="googleStatus" style="margin-right: 8px;">🌐 Google Speech:</span>
                                     <span id="googleStatusText" style="color: #f44336;">❌ No Google API key</span>
+                                </div>
+                                <div style="display: flex; align-items: center; margin: 4px 0;">
+                                    <span id="azureStatus" style="margin-right: 8px;">☁️ Azure Speech:</span>
+                                    <span id="azureStatusText" style="color: #f44336;">❌ No Azure API key</span>
+                                </div>
+                                <div style="display: flex; align-items: center; margin: 4px 0;">
+                                    <span id="freeStatus" style="margin-right: 8px;">🆓 Vosk (Offline):</span>
+                                    <span style="color: #ff9800;">⚠️ Advanced setup required</span>
                                 </div>
                             </div>
                         </div>
@@ -1186,30 +1200,34 @@ class NoxExtension {
             function initializeVoiceSettings() {
                 const voiceEngineSelect = document.getElementById('voiceEngine');
                 const googleApiKeySection = document.getElementById('googleApiKeySection');
+                const azureApiKeySection = document.getElementById('azureApiKeySection');
 
-                // Show/hide Google API key section and dynamic notes based on engine selection
+                // Show/hide API key sections and dynamic notes based on engine selection
                 voiceEngineSelect.addEventListener('change', () => {
                     const selectedEngine = voiceEngineSelect.value;
                     const voiceEngineNote = document.getElementById('voiceEngineNote');
 
-                    // Show/hide Google API key section
-                    if (selectedEngine === 'google') {
-                        googleApiKeySection.style.display = 'block';
-                    } else {
-                        googleApiKeySection.style.display = 'none';
-                    }
+                    // Show/hide API key sections
+                    googleApiKeySection.style.display = selectedEngine === 'google' ? 'block' : 'none';
+                    azureApiKeySection.style.display = selectedEngine === 'azure' ? 'block' : 'none';
 
                     // Show dynamic note based on selected engine
-                    if (selectedEngine === 'free') {
-                        voiceEngineNote.style.display = 'none';
-                    } else if (selectedEngine === 'openai') {
+                    if (selectedEngine === 'openai') {
                         voiceEngineNote.style.display = 'block';
-                        voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> OpenAI Whisper uses your existing OpenAI API key from the "🔑 API Keys" section and charges ~$0.006 per minute.';
-                        voiceEngineNote.style.color = '#888';
+                        voiceEngineNote.innerHTML = '<strong>💡 Recommended:</strong> Uses your existing OpenAI API key. Most accurate and cost-effective (~$0.006/minute).';
+                        voiceEngineNote.style.color = '#4CAF50';
                     } else if (selectedEngine === 'google') {
                         voiceEngineNote.style.display = 'block';
-                        voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> Google Speech requires a separate Google Cloud API key. Enter it below to enable this engine.';
+                        voiceEngineNote.innerHTML = '<strong>💡 Enterprise Option:</strong> Requires separate Google Cloud API key. Enterprise-grade accuracy and reliability.';
                         voiceEngineNote.style.color = '#888';
+                    } else if (selectedEngine === 'azure') {
+                        voiceEngineNote.style.display = 'block';
+                        voiceEngineNote.innerHTML = '<strong>💡 Microsoft Integration:</strong> Requires Azure subscription. Great for Microsoft-integrated workflows.';
+                        voiceEngineNote.style.color = '#888';
+                    } else if (selectedEngine === 'free') {
+                        voiceEngineNote.style.display = 'block';
+                        voiceEngineNote.innerHTML = '<strong>⚠️ Advanced Setup:</strong> 100% offline but requires development tools installation. <a href="#" onclick="showAdvancedGuide()" style="color: #4CAF50;">View Setup Guide</a>';
+                        voiceEngineNote.style.color = '#f44336';
                     }
                 });
 
@@ -1236,6 +1254,21 @@ class NoxExtension {
                     }
                 });
 
+                // Save Azure API key
+                document.getElementById('saveAzureApiKey').addEventListener('click', () => {
+                    const azureApiKey = document.getElementById('azureApiKey').value;
+                    const azureRegion = document.getElementById('azureRegion').value;
+                    if (azureApiKey.trim() && azureRegion.trim()) {
+                        vscode.postMessage({
+                            type: 'setAzureApiKey',
+                            apiKey: azureApiKey.trim(),
+                            region: azureRegion.trim()
+                        });
+                        document.getElementById('azureApiKey').value = '';
+                        document.getElementById('azureRegion').value = '';
+                    }
+                });
+
                 // Request current voice status
                 vscode.postMessage({ type: 'getVoiceStatus' });
             }
@@ -1245,37 +1278,52 @@ class NoxExtension {
                 document.getElementById('voiceEnabled').checked = status.enabled;
                 document.getElementById('voiceEngine').value = status.engine;
 
-                // Show/hide Google API key section and dynamic notes
+                // Show/hide API key sections and dynamic notes
                 const googleApiKeySection = document.getElementById('googleApiKeySection');
+                const azureApiKeySection = document.getElementById('azureApiKeySection');
                 const voiceEngineNote = document.getElementById('voiceEngineNote');
 
-                if (status.engine === 'google') {
-                    googleApiKeySection.style.display = 'block';
-                } else {
-                    googleApiKeySection.style.display = 'none';
-                }
+                googleApiKeySection.style.display = status.engine === 'google' ? 'block' : 'none';
+                azureApiKeySection.style.display = status.engine === 'azure' ? 'block' : 'none';
 
                 // Show dynamic note based on current engine
-                if (status.engine === 'free') {
-                    voiceEngineNote.style.display = 'none';
-                } else if (status.engine === 'openai') {
+                if (status.engine === 'openai') {
                     voiceEngineNote.style.display = 'block';
-                    voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> OpenAI Whisper uses your existing OpenAI API key from the "🔑 API Keys" section and charges ~$0.006 per minute.';
-                    voiceEngineNote.style.color = '#888';
+                    if (status.engines.openai) {
+                        voiceEngineNote.innerHTML = '<strong>✅ OpenAI Whisper is configured and ready to use.</strong>';
+                        voiceEngineNote.style.color = '#4CAF50';
+                    } else {
+                        voiceEngineNote.innerHTML = '<strong>💡 Recommended:</strong> Uses your existing OpenAI API key. Most accurate and cost-effective (~$0.006/minute).';
+                        voiceEngineNote.style.color = '#888';
+                    }
                 } else if (status.engine === 'google') {
                     voiceEngineNote.style.display = 'block';
                     if (status.engines.google) {
                         voiceEngineNote.innerHTML = '<strong>✅ Google Speech is configured and ready to use.</strong>';
                         voiceEngineNote.style.color = '#4CAF50';
                     } else {
-                        voiceEngineNote.innerHTML = '<strong>💡 Note:</strong> Google Speech requires a separate Google Cloud API key. Enter it below to enable this engine.';
+                        voiceEngineNote.innerHTML = '<strong>💡 Enterprise Option:</strong> Requires separate Google Cloud API key. Enterprise-grade accuracy and reliability.';
                         voiceEngineNote.style.color = '#888';
                     }
+                } else if (status.engine === 'azure') {
+                    voiceEngineNote.style.display = 'block';
+                    if (status.engines.azure) {
+                        voiceEngineNote.innerHTML = '<strong>✅ Azure Speech is configured and ready to use.</strong>';
+                        voiceEngineNote.style.color = '#4CAF50';
+                    } else {
+                        voiceEngineNote.innerHTML = '<strong>💡 Microsoft Integration:</strong> Requires Azure subscription. Great for Microsoft-integrated workflows.';
+                        voiceEngineNote.style.color = '#888';
+                    }
+                } else if (status.engine === 'free') {
+                    voiceEngineNote.style.display = 'block';
+                    voiceEngineNote.innerHTML = '<strong>⚠️ Advanced Setup:</strong> 100% offline but requires development tools installation. <a href="#" onclick="showAdvancedGuide()" style="color: #4CAF50;">View Setup Guide</a>';
+                    voiceEngineNote.style.color = '#f44336';
                 }
 
                 // Update engine status indicators
                 const openaiStatusText = document.getElementById('openaiStatusText');
                 const googleStatusText = document.getElementById('googleStatusText');
+                const azureStatusText = document.getElementById('azureStatusText');
 
                 if (status.engines.openai) {
                     openaiStatusText.textContent = '✅ Available (using OpenAI key)';
@@ -1291,6 +1339,14 @@ class NoxExtension {
                 } else {
                     googleStatusText.textContent = '❌ No Google API key';
                     googleStatusText.style.color = '#f44336';
+                }
+
+                if (status.engines.azure) {
+                    azureStatusText.textContent = '✅ Available';
+                    azureStatusText.style.color = '#4CAF50';
+                } else {
+                    azureStatusText.textContent = '❌ No Azure API key';
+                    azureStatusText.style.color = '#f44336';
                 }
             }
 
@@ -1333,16 +1389,19 @@ class NoxExtension {
         "nox.voiceSettings",
         {
           enabled: true,
-          engine: "free",
+          engine: "openai", // Default to OpenAI (recommended)
           googleApiKey: "",
+          azureApiKey: "",
+          azureRegion: "",
         }
       );
 
       // Check engine availability
       const engines = {
-        free: true, // Always available
         openai: await this.agentController.aiClient.hasValidApiKey("openai"),
         google: !!voiceSettings.googleApiKey,
+        azure: !!voiceSettings.azureApiKey,
+        free: false, // Vosk requires advanced setup
       };
 
       const status = {
@@ -1435,6 +1494,50 @@ class NoxExtension {
       this.logger.info("🎤 Google API key updated for voice");
     } catch (error) {
       this.logger.error("Error setting Google API key:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🎤 Set Azure API key for voice
+   */
+  async setAzureApiKey(apiKey, region) {
+    try {
+      // Get current settings
+      const currentSettings = this.context.workspaceState.get(
+        "nox.voiceSettings",
+        {
+          enabled: true,
+          engine: "openai",
+          googleApiKey: "",
+          azureApiKey: "",
+          azureRegion: "",
+        }
+      );
+
+      // Update Azure API key and region
+      currentSettings.azureApiKey = apiKey;
+      currentSettings.azureRegion = region;
+
+      // Save to workspace state
+      await this.context.workspaceState.update(
+        "nox.voiceSettings",
+        currentSettings
+      );
+
+      // Update voice recording service if it exists
+      if (
+        this.chatSidebarProvider &&
+        this.chatSidebarProvider.voiceRecordingService
+      ) {
+        await this.chatSidebarProvider.voiceRecordingService.updateVoiceSettings(
+          currentSettings
+        );
+      }
+
+      this.logger.info("🎤 Azure API key updated for voice");
+    } catch (error) {
+      this.logger.error("Error setting Azure API key:", error);
       throw error;
     }
   }

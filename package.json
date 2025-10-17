@@ -318,12 +318,14 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@google-cloud/speech": "^7.2.1",
     "axios": "^1.4.0",
     "chroma-js": "^2.4.2",
     "dompurify": "^3.3.0",
     "highlight.js": "^11.11.1",
     "marked": "^9.1.6",
     "node-record-lpcm16": "^1.0.1",
+    "nox-sox": "file:packages/nox-sox",
     "openai": "^6.3.0",
     "uuid": "^9.0.0"
   }

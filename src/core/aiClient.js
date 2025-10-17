@@ -27,9 +27,25 @@ class AIClient {
       },
       openai: {
         name: "🧠 OpenAI GPT",
-        models: ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"],
+        models: [
+          // 🏆 Main Production Models
+          "chatgpt-4o-latest", // Always latest GPT-4o
+          "gpt-4o", // Latest stable GPT-4o
+          "gpt-4o-mini", // Cost-effective, fast
+          "gpt-4-turbo", // Most capable reasoning
+          "gpt-3.5-turbo", // Legacy, cheapest
+
+          // 🚀 Next Generation (if available)
+          "gpt-4.1", // Newest generation
+          "gpt-5", // Next-gen (preview)
+
+          // 🎯 Specialized Models
+          "gpt-4o-audio-preview", // Voice/audio processing
+          "gpt-4o-search-preview", // Enhanced search
+          "gpt-4o-realtime-preview", // Live conversations
+        ],
         baseUrl: "https://api.openai.com/v1",
-        defaultModel: "gpt-4",
+        defaultModel: "gpt-4o-mini", // Best value for most tasks
       },
       deepseek: {
         name: "⚡ DeepSeek",
@@ -558,14 +574,31 @@ class AIClient {
    * 💰 Calculate OpenAI API costs
    */
   calculateOpenAICost(usage, model) {
-    // OpenAI pricing (as of 2024)
+    // OpenAI pricing (as of 2024-2025)
     const pricing = {
-      "gpt-4": { input: 0.03, output: 0.06 }, // per 1K tokens
+      // 🏆 Main Production Models
+      "chatgpt-4o-latest": { input: 0.0025, output: 0.01 },
+      "gpt-4o": { input: 0.0025, output: 0.01 },
+      "gpt-4o-mini": { input: 0.00015, output: 0.0006 },
       "gpt-4-turbo": { input: 0.01, output: 0.03 },
       "gpt-3.5-turbo": { input: 0.0005, output: 0.0015 },
+
+      // 🚀 Next Generation (estimated pricing)
+      "gpt-4.1": { input: 0.005, output: 0.015 },
+      "gpt-5": { input: 0.01, output: 0.03 },
+
+      // 🎯 Specialized Models (premium pricing)
+      "gpt-4o-audio-preview": { input: 0.005, output: 0.02 },
+      "gpt-4o-search-preview": { input: 0.005, output: 0.02 },
+      "gpt-4o-realtime-preview": { input: 0.005, output: 0.02 },
+
+      // Legacy models (deprecated but still available)
+      "gpt-4": { input: 0.03, output: 0.06 },
+      "gpt-4o-2024-11-20": { input: 0.0025, output: 0.01 },
+      "gpt-4o-mini-2024-07-18": { input: 0.00015, output: 0.0006 },
     };
 
-    const rates = pricing[model] || pricing["gpt-4"];
+    const rates = pricing[model] || pricing["gpt-4o-mini"];
     return (
       (usage.prompt_tokens * rates.input +
         usage.completion_tokens * rates.output) /

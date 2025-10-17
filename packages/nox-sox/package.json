@@ -1,0 +1,44 @@
+{
+  "name": "nox-sox",
+  "version": "1.0.0",
+  "description": "SoX (Sound eXchange) binaries for all platforms - Enterprise-grade audio recording for Nox VS Code extension",
+  "main": "index.js",
+  "author": "Nox Team",
+  "license": "MIT",
+  "keywords": [
+    "sox",
+    "audio",
+    "recording",
+    "sound",
+    "vscode",
+    "nox",
+    "speech-to-text"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/nox-sox.git"
+  },
+  "files": [
+    "index.js",
+    "postinstall.js",
+    "bin/",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  },
+  "optionalDependencies": {
+    "nox-sox-win32-x64": "1.0.0",
+    "nox-sox-win32-arm64": "1.0.0",
+    "nox-sox-darwin-x64": "1.0.0",
+    "nox-sox-darwin-arm64": "1.0.0",
+    "nox-sox-linux-x64": "1.0.0",
+    "nox-sox-linux-arm64": "1.0.0",
+    "nox-sox-linux-armhf": "1.0.0",
+    "nox-sox-alpine-x64": "1.0.0",
+    "nox-sox-alpine-arm64": "1.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

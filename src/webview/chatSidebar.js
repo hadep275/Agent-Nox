@@ -139,12 +139,6 @@ class NoxChatViewProvider {
               await this.sendVoiceStatus();
               break;
 
-            case "stopVoiceRecording":
-              // Stop voice recording
-              this.logger.info("🎤 Stopping voice recording");
-              await this.stopVoiceRecording();
-              break;
-
             default:
               this.logger.warn(`Unknown message type: ${message.type}`);
           }
