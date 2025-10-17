@@ -1252,19 +1252,19 @@ class NoxExtension {
                     // Show dynamic note based on selected engine
                     if (selectedEngine === 'openai') {
                         voiceEngineNote.style.display = 'block';
-                        voiceEngineNote.innerHTML = '<strong>💡 Recommended:</strong> Uses your existing OpenAI API key. Most accurate and cost-effective (~$0.006/minute).';
+                        voiceEngineNote.innerHTML = '<strong>&#128161; Recommended:</strong> Uses your existing OpenAI API key. Most accurate and cost-effective (~$0.006/minute).';
                         voiceEngineNote.style.color = '#4CAF50';
                     } else if (selectedEngine === 'google') {
                         voiceEngineNote.style.display = 'block';
-                        voiceEngineNote.innerHTML = '<strong>💡 Enterprise Option:</strong> Requires separate Google Cloud API key. Enterprise-grade accuracy and reliability.';
+                        voiceEngineNote.innerHTML = '<strong>&#128161; Enterprise Option:</strong> Requires separate Google Cloud API key. Enterprise-grade accuracy and reliability.';
                         voiceEngineNote.style.color = '#888';
                     } else if (selectedEngine === 'azure') {
                         voiceEngineNote.style.display = 'block';
-                        voiceEngineNote.innerHTML = '<strong>💡 Microsoft Integration:</strong> Requires Azure subscription. Great for Microsoft-integrated workflows.';
+                        voiceEngineNote.innerHTML = '<strong>&#128161; Microsoft Integration:</strong> Requires Azure subscription. Great for Microsoft-integrated workflows.';
                         voiceEngineNote.style.color = '#888';
                     } else if (selectedEngine === 'free') {
                         voiceEngineNote.style.display = 'block';
-                        voiceEngineNote.innerHTML = '<strong>⚠️ Advanced Setup:</strong> 100% offline but requires development tools installation. <a href="#" onclick="showAdvancedGuide()" style="color: #4CAF50;">View Setup Guide</a>';
+                        voiceEngineNote.innerHTML = '<strong>&#9888; Advanced Setup:</strong> 100% offline but requires development tools installation. <a href="#" onclick="showAdvancedGuide()" style="color: #4CAF50;">View Setup Guide</a>';
                         voiceEngineNote.style.color = '#f44336';
                     }
 
@@ -1311,16 +1311,16 @@ class NoxExtension {
                     const langName = languageNames[language] || language;
 
                     if (engine === 'openai') {
-                        noteElement.innerHTML = `<strong>💡 Auto-Detection:</strong> Whisper supports ${langName} with 99% accuracy. Can auto-detect or use specified language for optimal results.`;
+                        noteElement.innerHTML = '<strong>&#128161; Auto-Detection:</strong> Whisper supports ' + langName + ' with 99% accuracy. Can auto-detect or use specified language for optimal results.';
                         noteElement.style.color = '#4CAF50';
                     } else if (engine === 'google') {
-                        noteElement.innerHTML = `<strong>💡 Regional Optimization:</strong> Google Speech optimized for ${langName} with regional accent recognition and cultural context.`;
+                        noteElement.innerHTML = '<strong>&#128161; Regional Optimization:</strong> Google Speech optimized for ' + langName + ' with regional accent recognition and cultural context.';
                         noteElement.style.color = '#888';
                     } else if (engine === 'azure') {
-                        noteElement.innerHTML = `<strong>💡 Neural Processing:</strong> Azure Speech provides high-quality ${langName} recognition with advanced neural voice processing.`;
+                        noteElement.innerHTML = '<strong>&#128161; Neural Processing:</strong> Azure Speech provides high-quality ' + langName + ' recognition with advanced neural voice processing.';
                         noteElement.style.color = '#888';
                     } else {
-                        noteElement.innerHTML = `<strong>💡 Language Support:</strong> ${langName} support varies by engine. Switch to OpenAI, Google, or Azure for best results.`;
+                        noteElement.innerHTML = '<strong>&#128161; Language Support:</strong> ' + langName + ' support varies by engine. Switch to OpenAI, Google, or Azure for best results.';
                         noteElement.style.color = '#888';
                     }
 
@@ -1389,33 +1389,33 @@ class NoxExtension {
                 if (status.engine === 'openai') {
                     voiceEngineNote.style.display = 'block';
                     if (status.engines.openai) {
-                        voiceEngineNote.innerHTML = '<strong>✅ OpenAI Whisper is configured and ready to use.</strong>';
+                        voiceEngineNote.innerHTML = '<strong>&#9989; OpenAI Whisper is configured and ready to use.</strong>';
                         voiceEngineNote.style.color = '#4CAF50';
                     } else {
-                        voiceEngineNote.innerHTML = '<strong>💡 Recommended:</strong> Uses your existing OpenAI API key. Most accurate and cost-effective (~$0.006/minute).';
+                        voiceEngineNote.innerHTML = '<strong>&#128161; Recommended:</strong> Uses your existing OpenAI API key. Most accurate and cost-effective (~$0.006/minute).';
                         voiceEngineNote.style.color = '#888';
                     }
                 } else if (status.engine === 'google') {
                     voiceEngineNote.style.display = 'block';
                     if (status.engines.google) {
-                        voiceEngineNote.innerHTML = '<strong>✅ Google Speech is configured and ready to use.</strong>';
+                        voiceEngineNote.innerHTML = '<strong>&#9989; Google Speech is configured and ready to use.</strong>';
                         voiceEngineNote.style.color = '#4CAF50';
                     } else {
-                        voiceEngineNote.innerHTML = '<strong>💡 Enterprise Option:</strong> Requires separate Google Cloud API key. Enterprise-grade accuracy and reliability.';
+                        voiceEngineNote.innerHTML = '<strong>&#128161; Enterprise Option:</strong> Requires separate Google Cloud API key. Enterprise-grade accuracy and reliability.';
                         voiceEngineNote.style.color = '#888';
                     }
                 } else if (status.engine === 'azure') {
                     voiceEngineNote.style.display = 'block';
                     if (status.engines.azure) {
-                        voiceEngineNote.innerHTML = '<strong>✅ Azure Speech is configured and ready to use.</strong>';
+                        voiceEngineNote.innerHTML = '<strong>&#9989; Azure Speech is configured and ready to use.</strong>';
                         voiceEngineNote.style.color = '#4CAF50';
                     } else {
-                        voiceEngineNote.innerHTML = '<strong>💡 Microsoft Integration:</strong> Requires Azure subscription. Great for Microsoft-integrated workflows.';
+                        voiceEngineNote.innerHTML = '<strong>&#128161; Microsoft Integration:</strong> Requires Azure subscription. Great for Microsoft-integrated workflows.';
                         voiceEngineNote.style.color = '#888';
                     }
                 } else if (status.engine === 'free') {
                     voiceEngineNote.style.display = 'block';
-                    voiceEngineNote.innerHTML = '<strong>⚠️ Advanced Setup:</strong> 100% offline but requires development tools installation. <a href="#" onclick="showAdvancedGuide()" style="color: #4CAF50;">View Setup Guide</a>';
+                    voiceEngineNote.innerHTML = '<strong>&#9888; Advanced Setup:</strong> 100% offline but requires development tools installation. <a href="#" onclick="showAdvancedGuide()" style="color: #4CAF50;">View Setup Guide</a>';
                     voiceEngineNote.style.color = '#f44336';
                 }
 
