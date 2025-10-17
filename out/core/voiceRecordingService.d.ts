@@ -18,6 +18,18 @@ declare class VoiceRecordingService {
      */
     saveVoiceSettings(): Promise<void>;
     /**
+     * Get Google API key from secure storage
+     */
+    getGoogleApiKey(): Promise<any>;
+    /**
+     * Get Azure API key from secure storage
+     */
+    getAzureApiKey(): Promise<any>;
+    /**
+     * Get Azure region from secure storage
+     */
+    getAzureRegion(): Promise<any>;
+    /**
      * Initialize voice engines based on settings
      */
     initializeVoiceEngines(): Promise<void>;
@@ -28,7 +40,11 @@ declare class VoiceRecordingService {
     /**
      * Initialize Google Speech-to-Text client
      */
-    initializeGoogleSpeech(): void;
+    initializeGoogleSpeech(): Promise<void>;
+    /**
+     * Initialize Azure Speech-to-Text client
+     */
+    initializeAzureSpeech(): Promise<void>;
     /**
      * Start recording audio from microphone
      */
@@ -181,15 +197,10 @@ declare class VoiceRecordingService {
     /**
      * Get detailed voice engine status for settings UI
      */
-    getVoiceEngineStatus(): {
+    getVoiceEngineStatus(): Promise<{
         enabled: any;
         selectedEngine: any;
         engines: {
-            free: {
-                available: boolean;
-                name: string;
-                description: string;
-            };
             openai: {
                 available: boolean;
                 name: string;
@@ -204,8 +215,22 @@ declare class VoiceRecordingService {
                 requiresKey: boolean;
                 hasKey: boolean;
             };
+            azure: {
+                available: boolean;
+                name: string;
+                description: string;
+                requiresKey: boolean;
+                hasKey: boolean;
+            };
+            free: {
+                available: boolean;
+                name: string;
+                description: string;
+                requiresKey: boolean;
+                hasKey: boolean;
+            };
         };
-    };
+    }>;
     /**
      * Update voice settings (called when settings change)
      */

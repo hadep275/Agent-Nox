@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const vscode = require("vscode");
+const sdk = require("microsoft-cognitiveservices-speech-sdk");
 
 class VoiceRecordingService {
   constructor(logger, context) {
@@ -15,8 +16,10 @@ class VoiceRecordingService {
     this.recorder = null;
     this.isRecording = false;
     this.audioFile = null;
-    this.speechClient = null;
+    this.speechClient = null; // Google Speech client
     this.openai = null;
+    this.azureSpeechConfig = null; // Azure Speech config
+    this.azureAudioConfig = null; // Azure Audio config
     this.voiceSettings = null;
 
     // Load voice settings and initialize services
@@ -32,7 +35,7 @@ class VoiceRecordingService {
    */
   loadVoiceSettings() {
     try {
-      // Load from Nox workspace state (like chat history)
+      // Load from Nox workspace state (only engine preference and enabled state)
       const savedSettings = this.context.workspaceState.get(
         "nox.voiceSettings",
         {}
@@ -42,15 +45,12 @@ class VoiceRecordingService {
         enabled:
           savedSettings.enabled !== undefined ? savedSettings.enabled : true,
         engine: savedSettings.engine || "openai", // Default to OpenAI (recommended)
-        googleApiKey: savedSettings.googleApiKey || "",
-        azureApiKey: savedSettings.azureApiKey || "",
-        azureRegion: savedSettings.azureRegion || "",
+        // API keys now stored securely in VS Code secrets
       };
 
       this.logger.info("🎤 Voice settings loaded from Nox storage:", {
         enabled: this.voiceSettings.enabled,
         engine: this.voiceSettings.engine,
-        hasGoogleKey: !!this.voiceSettings.googleApiKey,
       });
     } catch (error) {
       this.logger.error("🎤 Failed to load voice settings:", error);
@@ -58,9 +58,6 @@ class VoiceRecordingService {
       this.voiceSettings = {
         enabled: true,
         engine: "openai", // Default to OpenAI (recommended)
-        googleApiKey: "",
-        azureApiKey: "",
-        azureRegion: "",
       };
     }
   }
@@ -81,6 +78,42 @@ class VoiceRecordingService {
   }
 
   /**
+   * Get Google API key from secure storage
+   */
+  async getGoogleApiKey() {
+    try {
+      return await this.context.secrets.get("nox.google.voice.apiKey");
+    } catch (error) {
+      this.logger.error("🎤 Failed to get Google API key:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get Azure API key from secure storage
+   */
+  async getAzureApiKey() {
+    try {
+      return await this.context.secrets.get("nox.azure.voice.apiKey");
+    } catch (error) {
+      this.logger.error("🎤 Failed to get Azure API key:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get Azure region from secure storage
+   */
+  async getAzureRegion() {
+    try {
+      return await this.context.secrets.get("nox.azure.voice.region");
+    } catch (error) {
+      this.logger.error("🎤 Failed to get Azure region:", error);
+      return null;
+    }
+  }
+
+  /**
    * Initialize voice engines based on settings
    */
   async initializeVoiceEngines() {
@@ -89,7 +122,10 @@ class VoiceRecordingService {
       await this.initializeOpenAI();
 
       // Initialize Google Speech if we have an API key
-      this.initializeGoogleSpeech();
+      await this.initializeGoogleSpeech();
+
+      // Initialize Azure Speech if we have an API key
+      await this.initializeAzureSpeech();
 
       this.logger.info("🎤 Voice engines initialized");
     } catch (error) {
@@ -122,16 +158,17 @@ class VoiceRecordingService {
   /**
    * Initialize Google Speech-to-Text client
    */
-  initializeGoogleSpeech() {
+  async initializeGoogleSpeech() {
     try {
-      // Use API key from voice settings if available
-      if (this.voiceSettings?.googleApiKey) {
+      // Get API key from secure storage
+      const googleApiKey = await this.getGoogleApiKey();
+      if (googleApiKey) {
         const speech = require("@google-cloud/speech");
         this.speechClient = new speech.SpeechClient({
-          apiKey: this.voiceSettings.googleApiKey,
+          apiKey: googleApiKey,
         });
         this.logger.info(
-          "🎤 Google Speech-to-Text API initialized with API key"
+          "🎤 Google Speech-to-Text API initialized with secure API key"
         );
       } else {
         // Fallback to environment credentials
@@ -150,6 +187,37 @@ class VoiceRecordingService {
       }
     } catch (error) {
       this.logger.error("🎤 Failed to initialize Google Speech:", error);
+    }
+  }
+
+  /**
+   * Initialize Azure Speech-to-Text client
+   */
+  async initializeAzureSpeech() {
+    try {
+      // Get API key and region from secure storage
+      const azureApiKey = await this.getAzureApiKey();
+      const azureRegion = await this.getAzureRegion();
+
+      if (azureApiKey && azureRegion) {
+        // Initialize Azure Speech SDK
+        this.azureSpeechConfig = sdk.SpeechConfig.fromSubscription(
+          azureApiKey,
+          azureRegion
+        );
+        this.azureSpeechConfig.speechRecognitionLanguage = "en-US"; // Default language
+        this.azureSpeechConfig.outputFormat = sdk.OutputFormat.Detailed;
+
+        this.logger.info("🎤 Azure Speech client initialized successfully");
+      } else {
+        this.logger.warn(
+          "🎤 Azure Speech API key or region not found - Azure Speech unavailable"
+        );
+        this.azureSpeechConfig = null;
+      }
+    } catch (error) {
+      this.logger.error("🎤 Failed to initialize Azure Speech:", error);
+      this.azureSpeechConfig = null;
     }
   }
 
@@ -811,11 +879,14 @@ class VoiceRecordingService {
           }
 
         case "azure":
-          // Azure Speech implementation placeholder
-          this.logger.warn(
-            "🎤 Azure Speech not yet implemented, falling back to free engine"
-          );
-          return await this.transcribeWithVosk(audioFilePath);
+          if (this.azureSpeechConfig) {
+            return await this.transcribeWithAzure(audioFilePath);
+          } else {
+            this.logger.warn(
+              "🎤 Azure Speech not available, falling back to free engine"
+            );
+            return await this.transcribeWithVosk(audioFilePath);
+          }
 
         case "free":
         default:
@@ -905,6 +976,67 @@ class VoiceRecordingService {
   }
 
   /**
+   * Transcribe using Azure Speech-to-Text API
+   */
+  async transcribeWithAzure(audioFilePath) {
+    try {
+      this.logger.info("🎤 Transcribing with Azure Speech-to-Text...");
+
+      if (!this.azureSpeechConfig) {
+        throw new Error("Azure Speech not initialized");
+      }
+
+      // Create audio config from file
+      this.azureAudioConfig = sdk.AudioConfig.fromWavFileInput(
+        fs.readFileSync(audioFilePath)
+      );
+
+      // Create speech recognizer
+      const recognizer = new sdk.SpeechRecognizer(
+        this.azureSpeechConfig,
+        this.azureAudioConfig
+      );
+
+      return new Promise((resolve, reject) => {
+        recognizer.recognizeOnceAsync(
+          (result) => {
+            if (result.reason === sdk.ResultReason.RecognizedSpeech) {
+              this.logger.info("🎤 Azure Speech transcription successful");
+              resolve(result.text);
+            } else if (result.reason === sdk.ResultReason.NoMatch) {
+              this.logger.warn(
+                "🎤 Azure Speech: No speech could be recognized"
+              );
+              resolve(
+                "Sorry, I could not understand the audio. Please try again."
+              );
+            } else {
+              this.logger.error(
+                "🎤 Azure Speech recognition failed:",
+                result.errorDetails
+              );
+              reject(
+                new Error(
+                  `Azure Speech recognition failed: ${result.errorDetails}`
+                )
+              );
+            }
+            recognizer.close();
+          },
+          (error) => {
+            this.logger.error("🎤 Azure Speech transcription error:", error);
+            recognizer.close();
+            reject(error);
+          }
+        );
+      });
+    } catch (error) {
+      this.logger.error("🎤 Azure Speech transcription failed:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Mock transcription for testing/fallback
    */
   async mockTranscription() {
@@ -968,16 +1100,15 @@ class VoiceRecordingService {
   /**
    * Get detailed voice engine status for settings UI
    */
-  getVoiceEngineStatus() {
+  async getVoiceEngineStatus() {
+    // Check secure storage for API keys
+    const hasGoogleKey = !!(await this.getGoogleApiKey());
+    const hasAzureKey = !!(await this.getAzureApiKey());
+
     return {
       enabled: this.voiceSettings?.enabled || false,
-      selectedEngine: this.voiceSettings?.engine || "free",
+      selectedEngine: this.voiceSettings?.engine || "openai",
       engines: {
-        free: {
-          available: true,
-          name: "Free (Vosk)",
-          description: "100% free offline voice recognition",
-        },
         openai: {
           available: !!this.openai,
           name: "OpenAI Whisper",
@@ -990,7 +1121,21 @@ class VoiceRecordingService {
           name: "Google Speech",
           description: "Google Cloud Speech-to-Text",
           requiresKey: true,
-          hasKey: !!this.speechClient,
+          hasKey: hasGoogleKey,
+        },
+        azure: {
+          available: !!this.azureSpeechConfig,
+          name: "Azure Speech",
+          description: "Microsoft Azure Speech-to-Text",
+          requiresKey: true,
+          hasKey: hasAzureKey,
+        },
+        free: {
+          available: true,
+          name: "Vosk (Offline)",
+          description: "100% free offline voice recognition",
+          requiresKey: false,
+          hasKey: true,
         },
       },
     };

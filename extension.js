@@ -374,6 +374,10 @@ class NoxExtension {
               await this.setAzureApiKey(message.apiKey, message.region);
               await this.sendVoiceStatus(panel.webview);
               break;
+            case "setVoiceEngine":
+              await this.setVoiceEngine(message.engine);
+              await this.sendVoiceStatus(panel.webview);
+              break;
             default:
               this.logger.warn(
                 `Unknown settings message type: ${message.type}`
@@ -754,8 +758,6 @@ class NoxExtension {
                                 </div>
                             </div>
                         </div>
-
-                        <button id="saveVoiceSettings" class="btn" style="margin-top: 16px;">Save Voice Settings</button>
                     </div>
                 </div>
 
@@ -1202,7 +1204,7 @@ class NoxExtension {
                 const googleApiKeySection = document.getElementById('googleApiKeySection');
                 const azureApiKeySection = document.getElementById('azureApiKeySection');
 
-                // Show/hide API key sections and dynamic notes based on engine selection
+                // Show/hide API key sections, dynamic notes, and instant engine switching
                 voiceEngineSelect.addEventListener('change', () => {
                     const selectedEngine = voiceEngineSelect.value;
                     const voiceEngineNote = document.getElementById('voiceEngineNote');
@@ -1229,16 +1231,20 @@ class NoxExtension {
                         voiceEngineNote.innerHTML = '<strong>⚠️ Advanced Setup:</strong> 100% offline but requires development tools installation. <a href="#" onclick="showAdvancedGuide()" style="color: #4CAF50;">View Setup Guide</a>';
                         voiceEngineNote.style.color = '#f44336';
                     }
+
+                    // Instant voice engine switching (like chat provider switching)
+                    vscode.postMessage({
+                        type: 'setVoiceEngine',
+                        engine: selectedEngine
+                    });
                 });
 
-                // Save voice settings
-                document.getElementById('saveVoiceSettings').addEventListener('click', () => {
+                // Handle voice enabled checkbox change
+                document.getElementById('voiceEnabled').addEventListener('change', () => {
                     const enabled = document.getElementById('voiceEnabled').checked;
-                    const engine = document.getElementById('voiceEngine').value;
-
                     vscode.postMessage({
                         type: 'setVoiceSettings',
-                        settings: { enabled, engine }
+                        settings: { enabled }
                     });
                 });
 
@@ -1384,23 +1390,20 @@ class NoxExtension {
    */
   async sendVoiceStatus(webview) {
     try {
-      // Get voice settings from workspace state
+      // Get voice settings from workspace state (only engine preference and enabled state)
       const voiceSettings = this.context.workspaceState.get(
         "nox.voiceSettings",
         {
           enabled: true,
           engine: "openai", // Default to OpenAI (recommended)
-          googleApiKey: "",
-          azureApiKey: "",
-          azureRegion: "",
         }
       );
 
-      // Check engine availability
+      // Check engine availability from secure storage
       const engines = {
         openai: await this.agentController.aiClient.hasValidApiKey("openai"),
-        google: !!voiceSettings.googleApiKey,
-        azure: !!voiceSettings.azureApiKey,
+        google: !!(await this.context.secrets.get("nox.google.voice.apiKey")),
+        azure: !!(await this.context.secrets.get("nox.azure.voice.apiKey")),
         free: false, // Vosk requires advanced setup
       };
 
@@ -1421,15 +1424,12 @@ class NoxExtension {
    */
   async setVoiceSettings(settings) {
     try {
-      // Get current settings
+      // Get current settings (only enabled state and engine preference)
       const currentSettings = this.context.workspaceState.get(
         "nox.voiceSettings",
         {
           enabled: true,
           engine: "openai",
-          googleApiKey: "",
-          azureApiKey: "",
-          azureRegion: "",
         }
       );
 
@@ -1464,40 +1464,36 @@ class NoxExtension {
    */
   async setGoogleApiKey(apiKey) {
     try {
-      // Get current settings
-      const currentSettings = this.context.workspaceState.get(
+      // Migrate existing key from workspace state if it exists
+      const oldSettings = this.context.workspaceState.get(
         "nox.voiceSettings",
-        {
-          enabled: true,
-          engine: "openai",
-          googleApiKey: "",
-          azureApiKey: "",
-          azureRegion: "",
-        }
+        {}
       );
+      if (oldSettings.googleApiKey && !apiKey) {
+        // Migration: move old key to secure storage
+        apiKey = oldSettings.googleApiKey;
+        delete oldSettings.googleApiKey;
+        await this.context.workspaceState.update(
+          "nox.voiceSettings",
+          oldSettings
+        );
+        this.logger.info("🔄 Migrated Google API key to secure storage");
+      }
 
-      // Update Google API key
-      currentSettings.googleApiKey = apiKey;
+      // Store in VS Code secrets (secure)
+      await this.context.secrets.store("nox.google.voice.apiKey", apiKey);
 
-      // Save to workspace state
-      await this.context.workspaceState.update(
-        "nox.voiceSettings",
-        currentSettings
-      );
-
-      // Update voice recording service if it exists
+      // Update voice recording service immediately
       if (
         this.chatSidebarProvider &&
         this.chatSidebarProvider.voiceRecordingService
       ) {
-        await this.chatSidebarProvider.voiceRecordingService.updateVoiceSettings(
-          currentSettings
-        );
+        await this.chatSidebarProvider.voiceRecordingService.initializeVoiceEngines();
       }
 
-      this.logger.info("🎤 Google API key updated for voice");
+      this.logger.info("🔑 Google Voice API key stored securely");
     } catch (error) {
-      this.logger.error("Error setting Google API key:", error);
+      this.logger.error("Failed to store Google Voice API key:", error);
       throw error;
     }
   }
@@ -1507,29 +1503,67 @@ class NoxExtension {
    */
   async setAzureApiKey(apiKey, region) {
     try {
-      // Get current settings
+      // Migrate existing keys from workspace state if they exist
+      const oldSettings = this.context.workspaceState.get(
+        "nox.voiceSettings",
+        {}
+      );
+      if (oldSettings.azureApiKey && !apiKey) {
+        // Migration: move old keys to secure storage
+        apiKey = oldSettings.azureApiKey;
+        region = oldSettings.azureRegion || region;
+        delete oldSettings.azureApiKey;
+        delete oldSettings.azureRegion;
+        await this.context.workspaceState.update(
+          "nox.voiceSettings",
+          oldSettings
+        );
+        this.logger.info("🔄 Migrated Azure API key to secure storage");
+      }
+
+      // Store in VS Code secrets (secure)
+      await this.context.secrets.store("nox.azure.voice.apiKey", apiKey);
+      await this.context.secrets.store("nox.azure.voice.region", region);
+
+      // Update voice recording service immediately
+      if (
+        this.chatSidebarProvider &&
+        this.chatSidebarProvider.voiceRecordingService
+      ) {
+        await this.chatSidebarProvider.voiceRecordingService.initializeVoiceEngines();
+      }
+
+      this.logger.info("🔑 Azure Voice API key stored securely");
+    } catch (error) {
+      this.logger.error("Failed to store Azure Voice API key:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🎤 Set voice engine for instant switching
+   */
+  async setVoiceEngine(engine) {
+    try {
+      // Get current settings (only enabled state and engine preference)
       const currentSettings = this.context.workspaceState.get(
         "nox.voiceSettings",
         {
           enabled: true,
           engine: "openai",
-          googleApiKey: "",
-          azureApiKey: "",
-          azureRegion: "",
         }
       );
 
-      // Update Azure API key and region
-      currentSettings.azureApiKey = apiKey;
-      currentSettings.azureRegion = region;
+      // Update selected engine
+      currentSettings.engine = engine;
 
-      // Save to workspace state
+      // Save to workspace state (only engine preference)
       await this.context.workspaceState.update(
         "nox.voiceSettings",
         currentSettings
       );
 
-      // Update voice recording service if it exists
+      // Update voice recording service immediately
       if (
         this.chatSidebarProvider &&
         this.chatSidebarProvider.voiceRecordingService
@@ -1539,9 +1573,9 @@ class NoxExtension {
         );
       }
 
-      this.logger.info("🎤 Azure API key updated for voice");
+      this.logger.info(`🎤 Voice engine switched to: ${engine}`);
     } catch (error) {
-      this.logger.error("Error setting Azure API key:", error);
+      this.logger.error("Failed to set voice engine:", error);
       throw error;
     }
   }

@@ -324,6 +324,7 @@
     "dompurify": "^3.3.0",
     "highlight.js": "^11.11.1",
     "marked": "^9.1.6",
+    "microsoft-cognitiveservices-speech-sdk": "^1.46.0",
     "node-record-lpcm16": "^1.0.1",
     "nox-sox": "file:packages/nox-sox",
     "openai": "^6.3.0",
