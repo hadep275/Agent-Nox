@@ -8,15 +8,37 @@ declare class VoiceRecordingService {
     audioFile: any;
     speechClient: import("@google-cloud/speech/build/src/v1").SpeechClient | null;
     openai: any;
+    azureSpeechConfig: sdk.SpeechConfig | null;
+    azureAudioConfig: sdk.AudioConfig | null;
     voiceSettings: any;
     /**
      * Load voice settings from Nox workspace state
      */
     loadVoiceSettings(): void;
     /**
+     * 🌍 Get language code for specific engine
+     * Maps user-selected language to engine-specific format
+     */
+    getLanguageForEngine(engine: any): any;
+    /**
+     * 🌍 Get all available languages for UI
+     */
+    getAvailableLanguages(): {
+        code: string;
+        display: any;
+    }[];
+    /**
      * Save voice settings to Nox workspace state
      */
     saveVoiceSettings(): Promise<void>;
+    /**
+     * 🔄 Update voice settings and reinitialize engines
+     */
+    updateVoiceSettings(newSettings: any): Promise<void>;
+    /**
+     * Update voice settings (called when settings change)
+     */
+    updateVoiceSettings(newSettings: any): Promise<void>;
     /**
      * Get Google API key from secure storage
      */
@@ -174,6 +196,10 @@ declare class VoiceRecordingService {
      */
     transcribeWithGoogle(audioFilePath: any): Promise<any>;
     /**
+     * Transcribe using Azure Speech-to-Text API
+     */
+    transcribeWithAzure(audioFilePath: any): Promise<any>;
+    /**
      * Mock transcription for testing/fallback
      */
     mockTranscription(): Promise<string>;
@@ -231,9 +257,6 @@ declare class VoiceRecordingService {
             };
         };
     }>;
-    /**
-     * Update voice settings (called when settings change)
-     */
-    updateVoiceSettings(newSettings: any): Promise<void>;
 }
+import sdk = require("microsoft-cognitiveservices-speech-sdk");
 //# sourceMappingURL=voiceRecordingService.d.ts.map
