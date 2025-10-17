@@ -87,6 +87,22 @@ declare class VoiceRecordingService {
         message: string;
     }>;
     /**
+     * Handle automatic recording completion (when SoX finishes on its own)
+     */
+    handleRecordingCompletion(audioFilePath: any): Promise<void>;
+    /**
+     * Handle recording errors
+     */
+    handleRecordingError(error: any): Promise<void>;
+    /**
+     * Reset recorder state
+     */
+    resetRecorderState(): void;
+    /**
+     * Clean up recording resources
+     */
+    cleanupRecording(): void;
+    /**
      * Wait for FileBasedSoxRecorder to complete recording
      */
     waitForRecordingCompletion(): Promise<any>;

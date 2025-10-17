@@ -1426,8 +1426,10 @@ class NoxExtension {
         "nox.voiceSettings",
         {
           enabled: true,
-          engine: "free",
+          engine: "openai",
           googleApiKey: "",
+          azureApiKey: "",
+          azureRegion: "",
         }
       );
 
@@ -1467,8 +1469,10 @@ class NoxExtension {
         "nox.voiceSettings",
         {
           enabled: true,
-          engine: "free",
+          engine: "openai",
           googleApiKey: "",
+          azureApiKey: "",
+          azureRegion: "",
         }
       );
 
