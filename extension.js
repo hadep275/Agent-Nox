@@ -378,6 +378,10 @@ class NoxExtension {
               await this.setVoiceEngine(message.engine);
               await this.sendVoiceStatus(panel.webview);
               break;
+            case "setVoiceLanguage":
+              await this.setVoiceLanguage(message.language);
+              await this.sendVoiceStatus(panel.webview);
+              break;
             default:
               this.logger.warn(
                 `Unknown settings message type: ${message.type}`
@@ -710,6 +714,38 @@ class NoxExtension {
                             <!-- Dynamic note that shows based on selected engine -->
                             <div id="voiceEngineNote" style="margin-top: 8px; padding: 8px; background: #1a1a1a; border-radius: 4px; font-size: 12px; color: #888; display: none;">
                                 <!-- Content will be dynamically updated -->
+                            </div>
+                        </div>
+
+                        <!-- 🌍 Language Selection Section -->
+                        <div style="margin: 16px 0;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Language:</label>
+                            <select id="voiceLanguage" style="width: 100%; padding: 8px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 4px;">
+                                <option value="en-US">🇺🇸 English (US)</option>
+                                <option value="en-GB">🇬🇧 English (UK)</option>
+                                <option value="es-ES">🇪🇸 Spanish (Spain)</option>
+                                <option value="es-MX">🇲🇽 Spanish (Mexico)</option>
+                                <option value="fr-FR">🇫🇷 French (France)</option>
+                                <option value="de-DE">🇩🇪 German (Germany)</option>
+                                <option value="it-IT">🇮🇹 Italian (Italy)</option>
+                                <option value="pt-PT">🇵🇹 Portuguese (Portugal)</option>
+                                <option value="pt-BR">🇧🇷 Portuguese (Brazil)</option>
+                                <option value="ja-JP">🇯🇵 Japanese (Japan)</option>
+                                <option value="ko-KR">🇰🇷 Korean (Korea)</option>
+                                <option value="zh-CN">🇨🇳 Chinese (Simplified)</option>
+                                <option value="zh-TW">🇹🇼 Chinese (Traditional)</option>
+                                <option value="hi-IN">🇮🇳 Hindi (India)</option>
+                                <option value="ar-SA">🇸🇦 Arabic (Saudi Arabia)</option>
+                                <option value="ru-RU">🇷🇺 Russian (Russia)</option>
+                                <option value="nl-NL">🇳🇱 Dutch (Netherlands)</option>
+                                <option value="sv-SE">🇸🇪 Swedish (Sweden)</option>
+                                <option value="no-NO">🇳🇴 Norwegian (Norway)</option>
+                                <option value="da-DK">🇩🇰 Danish (Denmark)</option>
+                                <option value="pl-PL">🇵🇱 Polish (Poland)</option>
+                            </select>
+                            <!-- Dynamic language note -->
+                            <div id="voiceLanguageNote" style="margin-top: 8px; padding: 8px; background: #1a1a1a; border-radius: 4px; font-size: 12px; color: #888; display: none;">
+                                <!-- Content will be dynamically updated based on engine + language -->
                             </div>
                         </div>
 
@@ -1239,6 +1275,58 @@ class NoxExtension {
                     });
                 });
 
+                // 🌍 Handle language selection change (instant switching)
+                const voiceLanguageSelect = document.getElementById('voiceLanguage');
+                voiceLanguageSelect.addEventListener('change', () => {
+                    const selectedLanguage = voiceLanguageSelect.value;
+                    const selectedEngine = voiceEngineSelect.value;
+                    const voiceLanguageNote = document.getElementById('voiceLanguageNote');
+
+                    // Show dynamic language note based on engine + language
+                    updateLanguageNote(selectedEngine, selectedLanguage, voiceLanguageNote);
+
+                    // Instant language switching (like provider switching)
+                    vscode.postMessage({
+                        type: 'setVoiceLanguage',
+                        language: selectedLanguage
+                    });
+                });
+
+                // Function to update language-specific notes
+                function updateLanguageNote(engine, language, noteElement) {
+                    const languageNames = {
+                        'en-US': 'English (US)', 'en-GB': 'English (UK)',
+                        'es-ES': 'Spanish (Spain)', 'es-MX': 'Spanish (Mexico)',
+                        'fr-FR': 'French (France)', 'de-DE': 'German (Germany)',
+                        'it-IT': 'Italian (Italy)', 'pt-PT': 'Portuguese (Portugal)',
+                        'pt-BR': 'Portuguese (Brazil)', 'ja-JP': 'Japanese (Japan)',
+                        'ko-KR': 'Korean (Korea)', 'zh-CN': 'Chinese (Simplified)',
+                        'zh-TW': 'Chinese (Traditional)', 'hi-IN': 'Hindi (India)',
+                        'ar-SA': 'Arabic (Saudi Arabia)', 'ru-RU': 'Russian (Russia)',
+                        'nl-NL': 'Dutch (Netherlands)', 'sv-SE': 'Swedish (Sweden)',
+                        'no-NO': 'Norwegian (Norway)', 'da-DK': 'Danish (Denmark)',
+                        'pl-PL': 'Polish (Poland)'
+                    };
+
+                    const langName = languageNames[language] || language;
+
+                    if (engine === 'openai') {
+                        noteElement.innerHTML = `<strong>💡 Auto-Detection:</strong> Whisper supports ${langName} with 99% accuracy. Can auto-detect or use specified language for optimal results.`;
+                        noteElement.style.color = '#4CAF50';
+                    } else if (engine === 'google') {
+                        noteElement.innerHTML = `<strong>💡 Regional Optimization:</strong> Google Speech optimized for ${langName} with regional accent recognition and cultural context.`;
+                        noteElement.style.color = '#888';
+                    } else if (engine === 'azure') {
+                        noteElement.innerHTML = `<strong>💡 Neural Processing:</strong> Azure Speech provides high-quality ${langName} recognition with advanced neural voice processing.`;
+                        noteElement.style.color = '#888';
+                    } else {
+                        noteElement.innerHTML = `<strong>💡 Language Support:</strong> ${langName} support varies by engine. Switch to OpenAI, Google, or Azure for best results.`;
+                        noteElement.style.color = '#888';
+                    }
+
+                    noteElement.style.display = 'block';
+                }
+
                 // Handle voice enabled checkbox change
                 document.getElementById('voiceEnabled').addEventListener('change', () => {
                     const enabled = document.getElementById('voiceEnabled').checked;
@@ -1283,6 +1371,11 @@ class NoxExtension {
                 // Update checkboxes and selects
                 document.getElementById('voiceEnabled').checked = status.enabled;
                 document.getElementById('voiceEngine').value = status.engine;
+
+                // 🌍 Update language dropdown
+                if (status.language) {
+                    document.getElementById('voiceLanguage').value = status.language;
+                }
 
                 // Show/hide API key sections and dynamic notes
                 const googleApiKeySection = document.getElementById('googleApiKeySection');
@@ -1390,12 +1483,13 @@ class NoxExtension {
    */
   async sendVoiceStatus(webview) {
     try {
-      // Get voice settings from workspace state (only engine preference and enabled state)
+      // Get voice settings from workspace state (engine preference, enabled state, and language)
       const voiceSettings = this.context.workspaceState.get(
         "nox.voiceSettings",
         {
           enabled: true,
           engine: "openai", // Default to OpenAI (recommended)
+          language: "en-US", // 🌍 Default to English (US)
         }
       );
 
@@ -1410,6 +1504,7 @@ class NoxExtension {
       const status = {
         enabled: voiceSettings.enabled,
         engine: voiceSettings.engine,
+        language: voiceSettings.language, // 🌍 Include current language
         engines: engines,
       };
 
@@ -1576,6 +1671,49 @@ class NoxExtension {
       this.logger.info(`🎤 Voice engine switched to: ${engine}`);
     } catch (error) {
       this.logger.error("Failed to set voice engine:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🌍 Set voice language for instant switching
+   */
+  async setVoiceLanguage(language) {
+    try {
+      // Get current settings (enabled state, engine preference, and language)
+      const currentSettings = this.context.workspaceState.get(
+        "nox.voiceSettings",
+        {
+          enabled: true,
+          engine: "openai",
+          language: "en-US",
+        }
+      );
+
+      // Update selected language
+      currentSettings.language = language;
+
+      // Save to workspace state (language preference)
+      await this.context.workspaceState.update(
+        "nox.voiceSettings",
+        currentSettings
+      );
+
+      // Update voice recording service immediately
+      if (
+        this.chatSidebarProvider &&
+        this.chatSidebarProvider.voiceRecordingService
+      ) {
+        await this.chatSidebarProvider.voiceRecordingService.updateVoiceSettings(
+          currentSettings
+        );
+        // Re-initialize engines with new language
+        await this.chatSidebarProvider.voiceRecordingService.initializeVoiceEngines();
+      }
+
+      this.logger.info(`🌍 Voice language switched to: ${language}`);
+    } catch (error) {
+      this.logger.error("Failed to set voice language:", error);
       throw error;
     }
   }

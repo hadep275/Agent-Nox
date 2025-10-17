@@ -9,6 +9,139 @@ const os = require("os");
 const vscode = require("vscode");
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
 
+/**
+ * 🌍 Language mapping for different speech engines
+ * Maps user-friendly language codes to engine-specific formats
+ */
+const LANGUAGE_MAPPINGS = {
+  "en-US": {
+    openai: "en",
+    google: "en-US",
+    azure: "en-US",
+    display: "🇺🇸 English (US)",
+  },
+  "en-GB": {
+    openai: "en",
+    google: "en-GB",
+    azure: "en-GB",
+    display: "🇬🇧 English (UK)",
+  },
+  "es-ES": {
+    openai: "es",
+    google: "es-ES",
+    azure: "es-ES",
+    display: "🇪🇸 Spanish (Spain)",
+  },
+  "es-MX": {
+    openai: "es",
+    google: "es-MX",
+    azure: "es-MX",
+    display: "🇲🇽 Spanish (Mexico)",
+  },
+  "fr-FR": {
+    openai: "fr",
+    google: "fr-FR",
+    azure: "fr-FR",
+    display: "🇫🇷 French (France)",
+  },
+  "de-DE": {
+    openai: "de",
+    google: "de-DE",
+    azure: "de-DE",
+    display: "🇩🇪 German (Germany)",
+  },
+  "it-IT": {
+    openai: "it",
+    google: "it-IT",
+    azure: "it-IT",
+    display: "🇮🇹 Italian (Italy)",
+  },
+  "pt-PT": {
+    openai: "pt",
+    google: "pt-PT",
+    azure: "pt-PT",
+    display: "🇵🇹 Portuguese (Portugal)",
+  },
+  "pt-BR": {
+    openai: "pt",
+    google: "pt-BR",
+    azure: "pt-BR",
+    display: "🇧🇷 Portuguese (Brazil)",
+  },
+  "ja-JP": {
+    openai: "ja",
+    google: "ja-JP",
+    azure: "ja-JP",
+    display: "🇯🇵 Japanese (Japan)",
+  },
+  "ko-KR": {
+    openai: "ko",
+    google: "ko-KR",
+    azure: "ko-KR",
+    display: "🇰🇷 Korean (Korea)",
+  },
+  "zh-CN": {
+    openai: "zh",
+    google: "zh-CN",
+    azure: "zh-CN",
+    display: "🇨🇳 Chinese (Simplified)",
+  },
+  "zh-TW": {
+    openai: "zh",
+    google: "zh-TW",
+    azure: "zh-TW",
+    display: "🇹🇼 Chinese (Traditional)",
+  },
+  "hi-IN": {
+    openai: "hi",
+    google: "hi-IN",
+    azure: "hi-IN",
+    display: "🇮🇳 Hindi (India)",
+  },
+  "ar-SA": {
+    openai: "ar",
+    google: "ar-SA",
+    azure: "ar-SA",
+    display: "🇸🇦 Arabic (Saudi Arabia)",
+  },
+  "ru-RU": {
+    openai: "ru",
+    google: "ru-RU",
+    azure: "ru-RU",
+    display: "🇷🇺 Russian (Russia)",
+  },
+  "nl-NL": {
+    openai: "nl",
+    google: "nl-NL",
+    azure: "nl-NL",
+    display: "🇳🇱 Dutch (Netherlands)",
+  },
+  "sv-SE": {
+    openai: "sv",
+    google: "sv-SE",
+    azure: "sv-SE",
+    display: "🇸🇪 Swedish (Sweden)",
+  },
+  "no-NO": {
+    openai: "no",
+    google: "no-NO",
+    azure: "no-NO",
+    display: "🇳🇴 Norwegian (Norway)",
+  },
+  "da-DK": {
+    openai: "da",
+    google: "da-DK",
+    azure: "da-DK",
+    display: "🇩🇰 Danish (Denmark)",
+  },
+  "pl-PL": {
+    openai: "pl",
+    google: "pl-PL",
+    azure: "pl-PL",
+    display: "🇵🇱 Polish (Poland)",
+  },
+};
+
 class VoiceRecordingService {
   constructor(logger, context) {
     this.logger = logger;
@@ -45,6 +178,7 @@ class VoiceRecordingService {
         enabled:
           savedSettings.enabled !== undefined ? savedSettings.enabled : true,
         engine: savedSettings.engine || "openai", // Default to OpenAI (recommended)
+        language: savedSettings.language || "en-US", // 🌍 Default to English (US)
         // API keys now stored securely in VS Code secrets
       };
 
@@ -63,6 +197,35 @@ class VoiceRecordingService {
   }
 
   /**
+   * 🌍 Get language code for specific engine
+   * Maps user-selected language to engine-specific format
+   */
+  getLanguageForEngine(engine) {
+    const selectedLanguage = this.voiceSettings?.language || "en-US";
+    const mapping = LANGUAGE_MAPPINGS[selectedLanguage];
+
+    if (mapping && mapping[engine]) {
+      return mapping[engine];
+    }
+
+    // Fallback to English if language not supported
+    this.logger.warn(
+      `🌍 Language ${selectedLanguage} not supported for ${engine}, falling back to English`
+    );
+    return engine === "openai" ? "en" : "en-US";
+  }
+
+  /**
+   * 🌍 Get all available languages for UI
+   */
+  getAvailableLanguages() {
+    return Object.keys(LANGUAGE_MAPPINGS).map((code) => ({
+      code,
+      display: LANGUAGE_MAPPINGS[code].display,
+    }));
+  }
+
+  /**
    * Save voice settings to Nox workspace state
    */
   async saveVoiceSettings() {
@@ -74,6 +237,23 @@ class VoiceRecordingService {
       this.logger.info("🎤 Voice settings saved to Nox storage");
     } catch (error) {
       this.logger.error("🎤 Failed to save voice settings:", error);
+    }
+  }
+
+  /**
+   * 🔄 Update voice settings and reinitialize engines
+   */
+  async updateVoiceSettings(newSettings) {
+    try {
+      // Update internal settings
+      this.voiceSettings = { ...this.voiceSettings, ...newSettings };
+
+      // Save to workspace state
+      await this.saveVoiceSettings();
+
+      this.logger.info("🎤 Voice settings updated:", newSettings);
+    } catch (error) {
+      this.logger.error("🎤 Failed to update voice settings:", error);
     }
   }
 
@@ -205,7 +385,8 @@ class VoiceRecordingService {
           azureApiKey,
           azureRegion
         );
-        this.azureSpeechConfig.speechRecognitionLanguage = "en-US"; // Default language
+        this.azureSpeechConfig.speechRecognitionLanguage =
+          this.getLanguageForEngine("azure"); // 🌍 Dynamic language
         this.azureSpeechConfig.outputFormat = sdk.OutputFormat.Detailed;
 
         this.logger.info("🎤 Azure Speech client initialized successfully");
@@ -924,7 +1105,7 @@ class VoiceRecordingService {
       const transcription = await this.openai.audio.transcriptions.create({
         file: fs.createReadStream(audioFilePath),
         model: "whisper-1",
-        language: "en", // Can be made configurable
+        language: this.getLanguageForEngine("openai"), // 🌍 Dynamic language
       });
 
       const text = transcription.text.trim();
@@ -955,7 +1136,7 @@ class VoiceRecordingService {
         config: {
           encoding: "LINEAR16",
           sampleRateHertz: 16000,
-          languageCode: "en-US",
+          languageCode: this.getLanguageForEngine("google"), // 🌍 Dynamic language
         },
       };
 
