@@ -35,6 +35,14 @@ declare class NoxChatViewProvider {
      */
     handleStreamStop(messageId: any): Promise<void>;
     /**
+     * ▶️ Handle stream continue request - Resume streaming from where it stopped
+     */
+    handleStreamContinue(messageId: any): Promise<void>;
+    /**
+     * 🔄 Reset AI state (emergency fix for stuck state)
+     */
+    resetAIState(): void;
+    /**
      * 📨 Send message to webview
      */
     sendMessageToWebview(message: any): void;

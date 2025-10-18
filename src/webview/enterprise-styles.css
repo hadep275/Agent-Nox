@@ -1073,6 +1073,12 @@ body {
   }
 }
 
+/* Stopped Badge */
+.streaming-badge.stopped {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  animation: none; /* No pulsing for stopped state */
+}
+
 /* Stop Button */
 .stream-stop-btn {
   background: linear-gradient(135deg, #ef4444, #dc2626);
@@ -1100,6 +1106,39 @@ body {
 }
 
 .stream-stop-btn:disabled {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Continue Button */
+.stream-continue-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stream-continue-btn:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.stream-continue-btn:active {
+  transform: translateY(0);
+}
+
+.stream-continue-btn:disabled {
   background: linear-gradient(135deg, #6b7280, #4b5563);
   cursor: not-allowed;
   transform: none;
@@ -1316,7 +1355,8 @@ body {
     font-size: 11px;
   }
 
-  .stream-stop-btn {
+  .stream-stop-btn,
+  .stream-continue-btn {
     padding: 3px 6px;
     font-size: 9px;
   }

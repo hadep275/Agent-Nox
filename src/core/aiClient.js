@@ -1022,6 +1022,12 @@ class AIClient {
 
       try {
         while (true) {
+          // Check if stream was aborted
+          if (abortController?.signal.aborted) {
+            this.logger.info(`⏹️ Stream aborted for message: ${messageId}`);
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -1029,6 +1035,14 @@ class AIClient {
           const lines = chunk.split("\n");
 
           for (const line of lines) {
+            // Check abort signal before processing each line
+            if (abortController?.signal.aborted) {
+              this.logger.info(
+                `⏹️ Stream aborted during chunk processing: ${messageId}`
+              );
+              return null; // Exit early if aborted
+            }
+
             if (line.startsWith("data: ")) {
               const data = line.slice(6);
               if (data === "[DONE]") continue;
@@ -1111,7 +1125,8 @@ class AIClient {
     options,
     messageId,
     onChunk,
-    onComplete
+    onComplete,
+    abortController = null
   ) {
     const model = options.model || this.providers.openai.defaultModel;
     const maxTokens = options.maxTokens || 4000;
@@ -1131,6 +1146,7 @@ class AIClient {
             max_tokens: maxTokens,
             stream: true,
           }),
+          signal: abortController?.signal,
         }
       );
 
@@ -1148,6 +1164,14 @@ class AIClient {
 
       try {
         while (true) {
+          // Check if stream was aborted
+          if (abortController?.signal.aborted) {
+            this.logger.info(
+              `⏹️ OpenAI stream aborted for message: ${messageId}`
+            );
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -1155,6 +1179,14 @@ class AIClient {
           const lines = chunk.split("\n");
 
           for (const line of lines) {
+            // Check abort signal before processing each line
+            if (abortController?.signal.aborted) {
+              this.logger.info(
+                `⏹️ OpenAI stream aborted during chunk processing: ${messageId}`
+              );
+              return null; // Exit early if aborted
+            }
+
             if (line.startsWith("data: ")) {
               const data = line.slice(6);
               if (data === "[DONE]") continue;

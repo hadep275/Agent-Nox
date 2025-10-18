@@ -616,6 +616,16 @@ export class StreamingMessageComponent {
     const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!messageEl || !messageEl.hasAttribute('data-streaming')) return;
 
+    // If this is a continued stream, restore the stop button
+    const continueBtn = messageEl.querySelector('.stream-continue-btn') as HTMLButtonElement;
+    if (continueBtn) {
+      continueBtn.disabled = false;
+      continueBtn.innerHTML = '⏹️ Stop';
+      continueBtn.title = 'Stop generating response';
+      continueBtn.className = 'stream-stop-btn';
+      continueBtn.onclick = () => this.stopStreaming(messageId);
+    }
+
     // Get or create buffer for this message
     let buffer = this.activeBuffers.get(messageId);
     if (!buffer) {
@@ -780,7 +790,7 @@ export class StreamingMessageComponent {
    */
   private static stopStreaming(messageId: string): void {
     try {
-      const vscode = acquireVsCodeApi();
+      const vscode = (window as any).vscodeApi || (window as any).acquireVsCodeApi();
       vscode.postMessage({
         type: 'streamStop',
         messageId: messageId
@@ -846,6 +856,105 @@ export class StreamingMessageComponent {
     const textEl = messageEl.querySelector('.streaming-text') as HTMLElement;
     if (textEl) {
       textEl.innerHTML += `<div class="streaming-error">❌ ${error}</div>`;
+    }
+  }
+
+  /**
+   * ⏹️ Handle stream stopped - Update UI to show stopped state with continue option
+   */
+  static handleStreamStopped(messageId: string, partialContent?: string): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl || !messageEl.hasAttribute('data-streaming')) return;
+
+    console.log('⏹️ Handling stream stopped for message:', messageId);
+
+    // Flush any remaining content in buffer
+    const buffer = this.activeBuffers.get(messageId);
+    if (buffer) {
+      buffer.complete(); // Flush remaining content
+      // Don't destroy buffer yet - we might need to continue
+    }
+
+    // Update UI elements
+    const statusEl = messageEl.querySelector('.streaming-status');
+    const stopBtn = messageEl.querySelector('.stream-stop-btn') as HTMLButtonElement;
+    const progressText = messageEl.querySelector('.progress-text');
+    const cursorEl = messageEl.querySelector('.streaming-cursor');
+
+    // Update status to show stopped state
+    if (statusEl) {
+      statusEl.innerHTML = '🤖 Assistant <span class="streaming-badge stopped">STOPPED</span>';
+    }
+
+    // Change stop button to continue button
+    if (stopBtn) {
+      stopBtn.disabled = false;
+      stopBtn.innerHTML = '▶️ Continue';
+      stopBtn.title = 'Continue generating response';
+      stopBtn.className = 'stream-continue-btn'; // Change class for styling
+
+      // Update click handler to continue streaming
+      stopBtn.onclick = () => this.continueStreaming(messageId);
+    }
+
+    // Update progress text
+    if (progressText) {
+      progressText.textContent = '⏸️ Generation stopped - Click Continue to resume';
+    }
+
+    // Hide cursor since we're not actively streaming
+    if (cursorEl) {
+      (cursorEl as HTMLElement).style.display = 'none';
+    }
+
+    // Mark message as stopped (but still streaming-capable)
+    messageEl.setAttribute('data-streaming-stopped', 'true');
+
+    console.log('⏹️ Stream stopped UI updated for message:', messageId);
+  }
+
+  /**
+   * ▶️ Continue streaming request
+   */
+  private static continueStreaming(messageId: string): void {
+    try {
+      const vscode = (window as any).vscodeApi || (window as any).acquireVsCodeApi();
+      vscode.postMessage({
+        type: 'streamContinue',
+        messageId: messageId
+      });
+
+      // Update UI to show resuming state
+      const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageEl) {
+        const continueBtn = messageEl.querySelector('.stream-continue-btn') as HTMLButtonElement;
+        const progressText = messageEl.querySelector('.progress-text') as HTMLElement;
+        const statusEl = messageEl.querySelector('.streaming-status');
+        const cursorEl = messageEl.querySelector('.streaming-cursor');
+
+        if (continueBtn) {
+          continueBtn.disabled = true;
+          continueBtn.innerHTML = '🔄 Resuming...';
+          continueBtn.title = 'Resuming generation...';
+        }
+
+        if (progressText) {
+          progressText.textContent = '🔄 Resuming generation...';
+        }
+
+        if (statusEl) {
+          statusEl.innerHTML = '🤖 Assistant <span class="streaming-badge">STREAMING</span>';
+        }
+
+        if (cursorEl) {
+          (cursorEl as HTMLElement).style.display = 'inline'; // Show cursor again
+        }
+
+        // Remove stopped state
+        messageEl.removeAttribute('data-streaming-stopped');
+      }
+    } catch (error) {
+      console.error('Failed to continue streaming:', error);
     }
   }
 

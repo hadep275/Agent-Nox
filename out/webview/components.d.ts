@@ -103,6 +103,14 @@ export declare class StreamingMessageComponent {
      */
     static handleStreamingError(messageId: string, error: string): void;
     /**
+     * ⏹️ Handle stream stopped - Update UI to show stopped state with continue option
+     */
+    static handleStreamStopped(messageId: string, partialContent?: string): void;
+    /**
+     * ▶️ Continue streaming request
+     */
+    private static continueStreaming;
+    /**
      * SIMPLE: Only expand container, NO scroll interference during streaming
      */
     private static expandContainerOnly;

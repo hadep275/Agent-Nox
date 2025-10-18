@@ -370,6 +370,10 @@ class NoxChatApp {
         this.handleStreamingError(message.messageId, message.error);
         break;
 
+      case 'streamStopped':
+        this.handleStreamStopped(message.messageId, message.partialContent);
+        break;
+
       default:
         console.warn('Unknown message type:', message.type);
     }
@@ -1212,8 +1216,9 @@ class NoxChatApp {
   private updateStreamingMessage(messageId: string, chunk: string, tokens?: number): void {
     StreamingMessageComponent.updateContent(messageId, chunk, tokens);
 
-    // Auto-scroll to keep streaming content visible
-    this.scrollToBottom();
+    // ✅ SCROLL FREEDOM FIX: No auto-scroll during streaming chunks
+    // User can now scroll freely while streaming continues at bottom
+    // Only scroll when streaming starts/completes, not on every chunk
 
     console.log('🌊 Updated streaming message:', messageId, 'chunk length:', chunk.length, 'tokens:', tokens);
   }
@@ -1248,6 +1253,18 @@ class NoxChatApp {
     this.state.isAIResponding = false;
 
     console.error('🌊 Streaming error for message:', messageId, error);
+  }
+
+  /**
+   * ⏹️ Handle stream stopped
+   */
+  private handleStreamStopped(messageId: string, partialContent?: string): void {
+    StreamingMessageComponent.handleStreamStopped(messageId, partialContent);
+
+    // Reset AI responding state
+    this.state.isAIResponding = false;
+
+    console.log('⏹️ Stream stopped for message:', messageId);
   }
 }
 

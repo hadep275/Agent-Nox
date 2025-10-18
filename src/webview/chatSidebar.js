@@ -74,8 +74,16 @@ class NoxChatViewProvider {
               await this.handleStreamStop(message.messageId);
               break;
 
+            case "streamContinue":
+              await this.handleStreamContinue(message.messageId);
+              break;
+
             case "clearHistory":
               await this.clearChatHistory();
+              break;
+
+            case "resetAI":
+              this.resetAIState();
               break;
 
             case "ready":
@@ -260,7 +268,12 @@ class NoxChatViewProvider {
       return;
     }
 
+    this.logger.info(
+      `🌊 handleStreamingMessage called, isAIResponding: ${this.isAIResponding}`
+    );
+
     if (this.isAIResponding) {
+      this.logger.warn("AI is already responding, rejecting new message");
       this.sendMessageToWebview({
         type: "error",
         message: "Please wait for the current response to complete.",
@@ -350,6 +363,7 @@ class NoxChatViewProvider {
 
       // Clean up active stream
       this.activeStreams.delete(streamingMessageId);
+      this.isAIResponding = false; // CRITICAL: Reset the flag on error
 
       // Send streaming error
       this.sendMessageToWebview({
@@ -396,6 +410,127 @@ class NoxChatViewProvider {
     } catch (error) {
       this.logger.error("Error stopping stream:", error);
     }
+  }
+
+  /**
+   * ▶️ Handle stream continue request - Resume streaming from where it stopped
+   */
+  async handleStreamContinue(messageId) {
+    try {
+      this.logger.info(`▶️ Continue stream requested: ${messageId}`);
+
+      // Find the message in chat history to get the partial content
+      const messageIndex = this.chatHistory.findIndex(
+        (msg) => msg.id === messageId
+      );
+      if (messageIndex === -1) {
+        this.logger.error(`Message not found in history: ${messageId}`);
+        return;
+      }
+
+      const stoppedMessage = this.chatHistory[messageIndex];
+      const partialContent = stoppedMessage.content || "";
+
+      // Get the original user message (should be the previous message)
+      const userMessage =
+        messageIndex > 0 ? this.chatHistory[messageIndex - 1] : null;
+      if (!userMessage || userMessage.type !== "user") {
+        this.logger.error(
+          `Could not find original user message for: ${messageId}`
+        );
+        return;
+      }
+
+      // Create a continuation prompt
+      const continuationPrompt = `${userMessage.content}\n\n[Previous partial response: "${partialContent}"]\n\nPlease continue from where you left off, building naturally on the partial response above.`;
+
+      // Create new abort controller for the continued stream
+      const abortController = new AbortController();
+      this.activeStreams.set(messageId, abortController);
+      this.isAIResponding = true;
+
+      // Set up streaming handlers
+      const onChunk = (data) => {
+        this.sendMessageToWebview({
+          type: "streamChunk",
+          messageId: messageId,
+          chunk: data.chunk,
+          tokens: data.tokens,
+          isComplete: data.isComplete,
+        });
+      };
+
+      const onComplete = (finalMessage) => {
+        // Update the message in chat history with the complete content
+        stoppedMessage.content = finalMessage.content;
+        stoppedMessage.tokens = finalMessage.tokens;
+        stoppedMessage.cost = finalMessage.cost;
+        stoppedMessage.timestamp = new Date().toISOString();
+
+        this.sendMessageToWebview({
+          type: "streamComplete",
+          messageId: messageId,
+          finalMessage: finalMessage,
+        });
+
+        // Clean up active stream
+        this.activeStreams.delete(messageId);
+        this.isAIResponding = false;
+
+        this.logger.info(`🌊 Continued streaming completed for: ${messageId}`);
+      };
+
+      // Resume streaming with continuation prompt
+      await this.agentController.aiClient.sendStreamingRequest(
+        continuationPrompt,
+        {
+          maxTokens: 4000,
+          messageId: messageId,
+        },
+        onChunk,
+        onComplete,
+        abortController
+      );
+    } catch (error) {
+      this.logger.error("Error continuing stream:", error);
+
+      // Clean up on error
+      this.activeStreams.delete(messageId);
+      this.isAIResponding = false;
+
+      this.sendMessageToWebview({
+        type: "streamError",
+        messageId: messageId,
+        error: "Failed to continue streaming. Please try again.",
+      });
+    }
+  }
+
+  /**
+   * 🔄 Reset AI state (emergency fix for stuck state)
+   */
+  resetAIState() {
+    this.logger.warn("🔄 Resetting AI state - clearing all active streams");
+
+    // Clear all active streams
+    for (const [messageId, abortController] of this.activeStreams) {
+      try {
+        abortController.abort();
+        this.logger.info(`⏹️ Aborted stuck stream: ${messageId}`);
+      } catch (error) {
+        this.logger.error(`Error aborting stream ${messageId}:`, error);
+      }
+    }
+
+    this.activeStreams.clear();
+    this.isAIResponding = false;
+
+    this.sendMessageToWebview({
+      type: "info",
+      message: "AI state reset successfully. You can now send new messages.",
+    });
+
+    this.logger.info("🔄 AI state reset completed");
   }
 
   /**

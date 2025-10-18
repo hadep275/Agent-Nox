@@ -96,6 +96,17 @@ export interface StreamCompleteRequest extends BaseMessage {
   finalMessage: ChatMessage;
 }
 
+export interface StreamStoppedRequest extends BaseMessage {
+  type: 'streamStopped';
+  messageId: string;
+  partialContent?: string;
+}
+
+export interface StreamContinueRequest extends BaseMessage {
+  type: 'streamContinue';
+  messageId: string;
+}
+
 // Response message types
 export interface UserMessageResponse extends BaseMessage {
   type: 'userMessage';
@@ -151,6 +162,12 @@ export interface StreamCompleteResponse extends BaseMessage {
   type: 'streamComplete';
   messageId: string;
   finalMessage: ChatMessage;
+}
+
+export interface StreamStoppedResponse extends BaseMessage {
+  type: 'streamStopped';
+  messageId: string;
+  partialContent?: string;
 }
 
 // Chat message structure

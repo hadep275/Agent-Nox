@@ -89,7 +89,7 @@ declare class AIClient {
         cost: number;
         provider: string;
         model: any;
-    }>;
+    } | null>;
     /**
      * 🤖 Send request to AI provider - REAL IMPLEMENTATION
      */
@@ -249,11 +249,11 @@ declare class AIClient {
         cost: number;
         provider: string;
         model: any;
-    }>;
+    } | null>;
     /**
      * 🌊 OpenAI GPT Streaming API
      */
-    callOpenAIStreamingAPI(apiKey: any, prompt: any, options: any, messageId: any, onChunk: any, onComplete: any): Promise<{
+    callOpenAIStreamingAPI(apiKey: any, prompt: any, options: any, messageId: any, onChunk: any, onComplete: any, abortController?: null): Promise<{
         id: any;
         type: string;
         content: string;
@@ -262,7 +262,7 @@ declare class AIClient {
         cost: number;
         provider: string;
         model: any;
-    }>;
+    } | null>;
     /**
      * 🌊 DeepSeek Streaming API
      */
