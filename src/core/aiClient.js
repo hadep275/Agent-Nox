@@ -265,6 +265,103 @@ class AIClient {
   }
 
   /**
+   * 🌊 Send streaming request to AI provider - REAL-TIME IMPLEMENTATION
+   */
+  async sendStreamingRequest(
+    prompt,
+    options = {},
+    onChunk = null,
+    onComplete = null,
+    abortController = null
+  ) {
+    if (!this.isInitialized) {
+      throw new Error("AI Client not initialized");
+    }
+
+    const timer = this.performanceMonitor.startTimer("ai_streaming_request");
+    const provider = this.providers[this.currentProvider];
+    const messageId = options.messageId || Date.now().toString();
+
+    try {
+      this.logger.info(`🌊 Starting streaming request to ${provider.name}...`);
+
+      // Get API key
+      const apiKey = await this.getApiKey(this.currentProvider);
+      if (!apiKey) {
+        throw new Error(
+          `No API key configured for ${provider.name}. Please set up your API key first.`
+        );
+      }
+
+      const requestOptions = {
+        ...options,
+        model: options.model || this.currentModel,
+        stream: true, // Enable streaming
+      };
+
+      // Route to appropriate streaming provider
+      let finalMessage;
+      switch (this.currentProvider) {
+        case "anthropic":
+          finalMessage = await this.callAnthropicStreamingAPI(
+            apiKey,
+            prompt,
+            requestOptions,
+            messageId,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        case "openai":
+          finalMessage = await this.callOpenAIStreamingAPI(
+            apiKey,
+            prompt,
+            requestOptions,
+            messageId,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        case "deepseek":
+          finalMessage = await this.callDeepSeekStreamingAPI(
+            apiKey,
+            prompt,
+            requestOptions,
+            messageId,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        case "local":
+          finalMessage = await this.callLocalStreamingAPI(
+            prompt,
+            requestOptions,
+            messageId,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        default:
+          throw new Error(
+            `Streaming not supported for provider: ${this.currentProvider}`
+          );
+      }
+
+      timer.end();
+      this.logger.info(`🌊 Streaming request completed in ${timer.duration}ms`);
+      return finalMessage;
+    } catch (error) {
+      timer.end();
+      this.logger.error("Streaming request failed:", error);
+      throw this.enhanceError(error);
+    }
+  }
+
+  /**
    * 🤖 Send request to AI provider - REAL IMPLEMENTATION
    */
   async sendRequest(prompt, options = {}) {
@@ -867,6 +964,488 @@ class AIClient {
       this.isInitialized = false;
     } catch (error) {
       this.logger.error("Error during AI Client cleanup:", error);
+    }
+  }
+
+  /**
+   * 📊 Estimate token count for streaming progress
+   */
+  estimateTokens(text) {
+    // Rough estimation: ~4 characters per token for most languages
+    // This is a conservative estimate that works well for progress tracking
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * 🌊 Anthropic Claude Streaming API
+   */
+  async callAnthropicStreamingAPI(
+    apiKey,
+    prompt,
+    options,
+    messageId,
+    onChunk,
+    onComplete,
+    abortController = null
+  ) {
+    const model = options.model || this.providers.anthropic.defaultModel;
+    const maxTokens = options.maxTokens || 4000;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: model,
+          max_tokens: maxTokens,
+          messages: [{ role: "user", content: prompt }],
+          stream: true,
+        }),
+        signal: abortController?.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(
+          `Anthropic API error: ${response.status} ${response.statusText} - ${errorData}`
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              if (data === "[DONE]") continue;
+
+              try {
+                const parsed = JSON.parse(data);
+
+                if (parsed.type === "content_block_delta") {
+                  const text = parsed.delta.text;
+                  if (text) {
+                    fullContent += text;
+                    totalTokens += this.estimateTokens(text);
+
+                    // Send chunk to UI
+                    if (onChunk) {
+                      onChunk({
+                        messageId,
+                        chunk: text,
+                        tokens: totalTokens,
+                        isComplete: false,
+                      });
+                    }
+                  }
+                }
+              } catch (e) {
+                // Skip invalid JSON
+                this.logger.debug("Skipping invalid JSON in stream:", data);
+              }
+            }
+          }
+        }
+
+        // Calculate final cost
+        const usage = {
+          input_tokens: this.estimateTokens(prompt),
+          output_tokens: totalTokens,
+        };
+        const cost = this.calculateAnthropicCost(usage, model);
+
+        const finalMessage = {
+          id: messageId,
+          type: "assistant",
+          content: fullContent,
+          timestamp: new Date().toISOString(),
+          tokens: totalTokens,
+          cost: cost,
+          provider: "anthropic",
+          model: model,
+        };
+
+        // Record metrics
+        this.performanceMonitor.recordCost(
+          "anthropic",
+          model,
+          totalTokens,
+          cost
+        );
+
+        // Send completion
+        if (onComplete) {
+          onComplete(finalMessage);
+        }
+
+        return finalMessage;
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      this.logger.error("Anthropic streaming API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🌊 OpenAI GPT Streaming API
+   */
+  async callOpenAIStreamingAPI(
+    apiKey,
+    prompt,
+    options,
+    messageId,
+    onChunk,
+    onComplete
+  ) {
+    const model = options.model || this.providers.openai.defaultModel;
+    const maxTokens = options.maxTokens || 4000;
+
+    try {
+      const response = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: maxTokens,
+            stream: true,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(
+          `OpenAI API error: ${response.status} ${response.statusText} - ${errorData}`
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              if (data === "[DONE]") continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
+
+                if (delta?.content) {
+                  const text = delta.content;
+                  fullContent += text;
+                  totalTokens += this.estimateTokens(text);
+
+                  // Send chunk to UI
+                  if (onChunk) {
+                    onChunk({
+                      messageId,
+                      chunk: text,
+                      tokens: totalTokens,
+                      isComplete: false,
+                    });
+                  }
+                }
+              } catch (e) {
+                // Skip invalid JSON
+                this.logger.debug("Skipping invalid JSON in stream:", data);
+              }
+            }
+          }
+        }
+
+        // Calculate final cost
+        const usage = {
+          prompt_tokens: this.estimateTokens(prompt),
+          completion_tokens: totalTokens,
+          total_tokens: this.estimateTokens(prompt) + totalTokens,
+        };
+        const cost = this.calculateOpenAICost(usage, model);
+
+        const finalMessage = {
+          id: messageId,
+          type: "assistant",
+          content: fullContent,
+          timestamp: new Date().toISOString(),
+          tokens: totalTokens,
+          cost: cost,
+          provider: "openai",
+          model: model,
+        };
+
+        // Record metrics
+        this.performanceMonitor.recordCost("openai", model, totalTokens, cost);
+
+        // Send completion
+        if (onComplete) {
+          onComplete(finalMessage);
+        }
+
+        return finalMessage;
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      this.logger.error("OpenAI streaming API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🌊 DeepSeek Streaming API
+   */
+  async callDeepSeekStreamingAPI(
+    apiKey,
+    prompt,
+    options,
+    messageId,
+    onChunk,
+    onComplete
+  ) {
+    const model = options.model || this.providers.deepseek.defaultModel;
+    const maxTokens = options.maxTokens || 4000;
+
+    try {
+      const response = await fetch(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: maxTokens,
+            stream: true,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(
+          `DeepSeek API error: ${response.status} ${response.statusText} - ${errorData}`
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              if (data === "[DONE]") continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
+
+                if (delta?.content) {
+                  const text = delta.content;
+                  fullContent += text;
+                  totalTokens += this.estimateTokens(text);
+
+                  // Send chunk to UI
+                  if (onChunk) {
+                    onChunk({
+                      messageId,
+                      chunk: text,
+                      tokens: totalTokens,
+                      isComplete: false,
+                    });
+                  }
+                }
+              } catch (e) {
+                // Skip invalid JSON
+                this.logger.debug("Skipping invalid JSON in stream:", data);
+              }
+            }
+          }
+        }
+
+        // Calculate final cost
+        const usage = {
+          prompt_tokens: this.estimateTokens(prompt),
+          completion_tokens: totalTokens,
+          total_tokens: this.estimateTokens(prompt) + totalTokens,
+        };
+        const cost = this.calculateDeepSeekCost(usage, model);
+
+        const finalMessage = {
+          id: messageId,
+          type: "assistant",
+          content: fullContent,
+          timestamp: new Date().toISOString(),
+          tokens: totalTokens,
+          cost: cost,
+          provider: "deepseek",
+          model: model,
+        };
+
+        // Record metrics
+        this.performanceMonitor.recordCost(
+          "deepseek",
+          model,
+          totalTokens,
+          cost
+        );
+
+        // Send completion
+        if (onComplete) {
+          onComplete(finalMessage);
+        }
+
+        return finalMessage;
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      this.logger.error("DeepSeek streaming API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🌊 Local LLM Streaming API (Ollama/LM Studio)
+   */
+  async callLocalStreamingAPI(prompt, options, messageId, onChunk, onComplete) {
+    const model = options.model || "llama2";
+    const baseUrl = options.baseUrl || this.providers.local.baseUrl;
+
+    try {
+      const response = await fetch(`${baseUrl}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          prompt: prompt,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(
+          `Local LLM API error: ${response.status} ${response.statusText} - ${errorData}`
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n").filter((line) => line.trim());
+
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line);
+
+              if (parsed.response) {
+                const text = parsed.response;
+                fullContent += text;
+                totalTokens += this.estimateTokens(text);
+
+                // Send chunk to UI
+                if (onChunk) {
+                  onChunk({
+                    messageId,
+                    chunk: text,
+                    tokens: totalTokens,
+                    isComplete: parsed.done || false,
+                  });
+                }
+
+                // Check if streaming is complete
+                if (parsed.done) {
+                  break;
+                }
+              }
+            } catch (e) {
+              // Skip invalid JSON
+              this.logger.debug("Skipping invalid JSON in local stream:", line);
+            }
+          }
+        }
+
+        const finalMessage = {
+          id: messageId,
+          type: "assistant",
+          content: fullContent,
+          timestamp: new Date().toISOString(),
+          tokens: totalTokens,
+          cost: 0, // Local models are free
+          provider: "local",
+          model: model,
+        };
+
+        // Record metrics (no cost for local)
+        this.performanceMonitor.recordCost("local", model, totalTokens, 0);
+
+        // Send completion
+        if (onComplete) {
+          onComplete(finalMessage);
+        }
+
+        return finalMessage;
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      this.logger.error("Local LLM streaming API call failed:", error);
+      throw error;
     }
   }
 }

@@ -18,6 +18,7 @@ import {
   WebviewState,
   BaseMessage,
   SendMessageRequest,
+  SendStreamingMessageRequest,
   ProviderChangeRequest,
   ModelChangeRequest,
   ClearHistoryRequest,
@@ -29,7 +30,8 @@ import {
   MessageComponent,
   ProviderSelectorComponent,
   ModelSelectorComponent,
-  ThinkingIndicatorComponent
+  ThinkingIndicatorComponent,
+  StreamingMessageComponent
 } from './components';
 
 // VS Code API
@@ -52,6 +54,7 @@ class NoxChatApp {
     providerControls?: HTMLElement;
     sessionCost?: HTMLElement;
     sessionTokens?: HTMLElement;
+    streamingToggle?: HTMLInputElement;
   } = {};
 
   // Speech Recognition properties
@@ -117,6 +120,7 @@ class NoxChatApp {
     this.elements.voiceError = document.getElementById('voiceError') as HTMLElement;
     this.elements.sessionCost = document.getElementById('sessionCost') as HTMLElement;
     this.elements.sessionTokens = document.getElementById('sessionTokens') as HTMLElement;
+    this.elements.streamingToggle = document.getElementById('streamingToggle') as HTMLInputElement;
 
     // Initialize speech recognition
     this.initializeSpeechRecognition();
@@ -255,11 +259,15 @@ class NoxChatApp {
       return;
     }
 
-    // Send to extension
-    const request: SendMessageRequest = {
-      type: 'sendMessage',
-      content: message
-    };
+    // Check if streaming is enabled
+    const isStreamingEnabled = this.elements.streamingToggle?.checked ?? true;
+
+    console.log(`🌊 Sending message with streaming: ${isStreamingEnabled}`);
+
+    // Send to extension (streaming or regular based on toggle)
+    const request = isStreamingEnabled
+      ? { type: 'sendStreamingMessage', content: message } as SendStreamingMessageRequest
+      : { type: 'sendMessage', content: message } as SendMessageRequest;
 
     this.sendMessage(request);
 
@@ -343,6 +351,23 @@ class NoxChatApp {
 
       case 'confirmDelete':
         this.handleConfirmDelete(message.messageId);
+        break;
+
+      // Streaming message handlers
+      case 'streamStart':
+        this.startStreamingMessage(message.messageId);
+        break;
+
+      case 'streamChunk':
+        this.updateStreamingMessage(message.messageId, message.chunk, message.tokens);
+        break;
+
+      case 'streamComplete':
+        this.completeStreamingMessage(message.messageId, message.finalMessage);
+        break;
+
+      case 'streamError':
+        this.handleStreamingError(message.messageId, message.error);
         break;
 
       default:
@@ -1157,6 +1182,72 @@ class NoxChatApp {
 
     deleteBtn.onclick = confirmHandler;
     cancelBtn.onclick = cancelHandler;
+  }
+
+  /**
+   * 🌊 Start streaming message display
+   */
+  private startStreamingMessage(messageId: string): void {
+    if (!this.elements.messagesContainer) return;
+
+    // Hide thinking indicator if showing
+    this.showThinking(false);
+
+    // Create streaming message element
+    const streamingEl = StreamingMessageComponent.create(messageId);
+    this.elements.messagesContainer.appendChild(streamingEl);
+
+    // Set AI responding state
+    this.state.isAIResponding = true;
+
+    // Scroll to show new streaming message
+    this.scrollToBottom();
+
+    console.log('🌊 Started streaming message:', messageId);
+  }
+
+  /**
+   * 🌊 Update streaming message with new content chunk
+   */
+  private updateStreamingMessage(messageId: string, chunk: string, tokens?: number): void {
+    StreamingMessageComponent.updateContent(messageId, chunk, tokens);
+
+    // Auto-scroll to keep streaming content visible
+    this.scrollToBottom();
+
+    console.log('🌊 Updated streaming message:', messageId, 'chunk length:', chunk.length, 'tokens:', tokens);
+  }
+
+  /**
+   * 🌊 Complete streaming message and convert to regular message
+   */
+  private completeStreamingMessage(messageId: string, finalMessage: ChatMessage): void {
+    // Complete the streaming component
+    StreamingMessageComponent.completeStreaming(messageId, finalMessage);
+
+    // Update session stats
+    this.updateSessionStats(finalMessage.tokens, finalMessage.cost);
+
+    // Update state
+    this.state.isAIResponding = false;
+    this.state.chatHistory.push(finalMessage);
+
+    // Final scroll to show completed message
+    this.scrollToBottom();
+
+    console.log('🌊 Completed streaming message:', messageId, 'final tokens:', finalMessage.tokens);
+  }
+
+  /**
+   * 🌊 Handle streaming error
+   */
+  private handleStreamingError(messageId: string, error: string): void {
+    StreamingMessageComponent.handleStreamingError(messageId, error);
+
+    // Reset AI responding state
+    this.state.isAIResponding = false;
+
+    console.error('🌊 Streaming error for message:', messageId, error);
   }
 }
 

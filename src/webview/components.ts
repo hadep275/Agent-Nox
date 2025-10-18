@@ -3,8 +3,11 @@
  * Enterprise-grade UI components for chat interface
  */
 
-import { ChatMessage, CodeBlockProps, MessageComponentProps } from './types';
+import { ChatMessage, CodeBlockProps, MessageComponentProps, VSCodeAPI } from './types';
 import { NoxMarkdownRenderer } from './markdown-renderer';
+
+// VS Code API for streaming communication
+declare const acquireVsCodeApi: () => VSCodeAPI;
 
 /**
  * Message Component Factory
@@ -45,7 +48,7 @@ export class MessageComponent {
   /**
    * Create message metadata element with enhanced info and actions
    */
-  private static createMessageMeta(message: ChatMessage): HTMLElement {
+  static createMessageMeta(message: ChatMessage): HTMLElement {
     const metaEl = document.createElement('div');
     metaEl.className = 'message-meta';
 
@@ -427,5 +430,589 @@ export class ThinkingIndicatorComponent {
     thinkingEl.appendChild(contentEl);
 
     return thinkingEl;
+  }
+}
+
+/**
+ * Smart streaming buffer for natural typing speed
+ */
+class StreamingBuffer {
+  private buffer: string = '';
+  private timer: NodeJS.Timeout | null = null;
+  private messageId: string;
+  private onFlush: (content: string) => void;
+
+  // Speed presets for natural typing experience
+  private static readonly SPEED_PRESETS = {
+    slow: { delay: 150, minChunk: 1, maxChunk: 2 },     // Very readable, careful
+    medium: { delay: 80, minChunk: 1, maxChunk: 4 },    // Natural typing, slower
+    fast: { delay: 40, minChunk: 2, maxChunk: 6 },      // Quick but smooth
+    instant: { delay: 0, minChunk: 999, maxChunk: 999 } // Current behavior
+  };
+
+  private currentSpeed: keyof typeof StreamingBuffer.SPEED_PRESETS = 'medium';
+
+  constructor(messageId: string, onFlush: (content: string) => void) {
+    this.messageId = messageId;
+    this.onFlush = onFlush;
+  }
+
+  /**
+   * Add chunk to buffer with smart batching
+   */
+  addChunk(chunk: string): void {
+    this.buffer += chunk;
+
+    const preset = StreamingBuffer.SPEED_PRESETS[this.currentSpeed];
+
+    // For instant mode, flush immediately
+    if (preset.delay === 0) {
+      this.flushBuffer();
+      return;
+    }
+
+    // Batch chunks for smooth display
+    if (this.buffer.length >= preset.minChunk && !this.timer) {
+      this.scheduleFlush(preset.delay);
+    } else if (this.buffer.length >= preset.maxChunk) {
+      // Force flush if buffer gets too large
+      this.flushBuffer();
+    }
+  }
+
+  /**
+   * Schedule buffer flush with natural timing
+   */
+  private scheduleFlush(delay: number): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+    }
+
+    this.timer = setTimeout(() => {
+      this.flushBuffer();
+      this.timer = null;
+    }, delay);
+  }
+
+  /**
+   * Flush buffer to display
+   */
+  private flushBuffer(): void {
+    if (this.buffer.trim()) {
+      this.onFlush(this.buffer);
+      this.buffer = '';
+    }
+
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  }
+
+  /**
+   * Force complete flush (for stream end)
+   */
+  complete(): void {
+    this.flushBuffer();
+  }
+
+  /**
+   * Clean up resources
+   */
+  destroy(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.buffer = '';
+  }
+
+  /**
+   * Set streaming speed
+   */
+  setSpeed(speed: keyof typeof StreamingBuffer.SPEED_PRESETS): void {
+    this.currentSpeed = speed;
+  }
+}
+
+/**
+ * Streaming Message Component
+ * Handles real-time streaming AI responses with progress indicators
+ */
+export class StreamingMessageComponent {
+  private static activeBuffers = new Map<string, StreamingBuffer>();
+  private static globalSpeed: keyof typeof StreamingBuffer['SPEED_PRESETS'] = 'medium';
+  private static userHasScrolled = false;
+  private static lastScrollTime = 0;
+  private static markdownRenderTimers = new Map<string, NodeJS.Timeout>();
+  private static lastMarkdownRender = new Map<string, number>();
+  private static autoScrollDisabled = false; // User can disable auto-scroll completely
+
+  /**
+   * Create a streaming message element with progress indicators and stop button
+   */
+  static create(messageId: string): HTMLElement {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message assistant streaming';
+    messageEl.setAttribute('data-message-id', messageId);
+    messageEl.setAttribute('data-streaming', 'true');
+
+    // Message header with status and stop button
+    const headerEl = document.createElement('div');
+    headerEl.className = 'streaming-header';
+
+    const statusEl = document.createElement('span');
+    statusEl.className = 'streaming-status';
+    statusEl.innerHTML = '🤖 Assistant <span class="streaming-badge">STREAMING</span>';
+
+    const stopBtn = document.createElement('button');
+    stopBtn.className = 'stream-stop-btn';
+    stopBtn.innerHTML = '⏹️ Stop';
+    stopBtn.title = 'Stop generating response';
+    stopBtn.onclick = () => this.stopStreaming(messageId);
+
+    headerEl.appendChild(statusEl);
+    headerEl.appendChild(stopBtn);
+
+    // Content area with streaming text and cursor
+    const contentEl = document.createElement('div');
+    contentEl.className = 'message-content streaming-content';
+
+    const textEl = document.createElement('div');
+    textEl.className = 'streaming-text nox-markdown';
+    textEl.textContent = ''; // Start empty
+
+    const cursorEl = document.createElement('span');
+    cursorEl.className = 'streaming-cursor';
+    cursorEl.textContent = '█';
+
+    contentEl.appendChild(textEl);
+    contentEl.appendChild(cursorEl);
+
+    // Progress bar section
+    const progressEl = document.createElement('div');
+    progressEl.className = 'streaming-progress';
+    progressEl.innerHTML = `
+      <div class="progress-info">
+        <span class="progress-text">🔄 Generating response...</span>
+        <span class="token-count">0 tokens</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+      </div>
+    `;
+
+    messageEl.appendChild(headerEl);
+    messageEl.appendChild(contentEl);
+    messageEl.appendChild(progressEl);
+
+    return messageEl;
+  }
+
+  /**
+   * Update streaming message content with new chunk using smart buffering
+   */
+  static updateContent(messageId: string, chunk: string, tokens?: number): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl || !messageEl.hasAttribute('data-streaming')) return;
+
+    // Get or create buffer for this message
+    let buffer = this.activeBuffers.get(messageId);
+    if (!buffer) {
+      buffer = new StreamingBuffer(messageId, (content: string) => {
+        this.flushContentToDisplay(messageId, content);
+      });
+      buffer.setSpeed(this.globalSpeed); // Use global speed setting
+      this.activeBuffers.set(messageId, buffer);
+    }
+
+    // Add chunk to buffer for natural typing speed
+    buffer.addChunk(chunk);
+
+    // Update token count and progress (less frequently for better performance)
+    if (tokens && Math.random() < 0.3) { // Update ~30% of the time to reduce flicker
+      this.updateProgress(messageId, tokens);
+    }
+  }
+
+  /**
+   * Flush buffered content to display (called by StreamingBuffer)
+   */
+  private static flushContentToDisplay(messageId: string, content: string): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl || !messageEl.hasAttribute('data-streaming')) return;
+
+    const textEl = messageEl.querySelector('.streaming-text') as HTMLElement;
+    if (!textEl) return;
+
+    // PURE SEQUENTIAL STREAMING: Only append text, NO markdown rendering during streaming
+    // This ensures perfect line-by-line, character-by-character streaming
+    textEl.textContent += content;
+
+    // NO markdown rendering during streaming - this causes the chaos!
+    // Markdown will only be rendered when streaming completes
+
+    // ONLY expand container - NO auto-scroll logic during streaming
+    this.expandContainerOnly(messageEl as HTMLElement, textEl);
+  }
+
+  /**
+   * TEMPORARILY DISABLED FOR TESTING: Schedule smart markdown rendering
+   */
+  private static scheduleSmartMarkdownRender(messageId: string, textEl: HTMLElement): void {
+    // DISABLED FOR TESTING: No markdown rendering during streaming
+    // This will help us isolate if the chaos is caused by markdown rendering
+    // or by something else in the streaming process
+    console.log('🧪 TESTING: Markdown rendering call blocked');
+  }
+
+  /**
+   * TEMPORARILY DISABLED FOR TESTING: Render markdown safely
+   */
+  private static renderMarkdownSafely(messageId: string, textEl: HTMLElement): void {
+    // DISABLED FOR TESTING: No markdown rendering
+    console.log('🧪 TESTING: Markdown rendering blocked');
+  }
+
+  /**
+   * Update progress indicators
+   */
+  private static updateProgress(messageId: string, tokens: number): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl) return;
+
+    const tokenEl = messageEl.querySelector('.token-count') as HTMLElement;
+    const progressFill = messageEl.querySelector('.progress-fill') as HTMLElement;
+
+    if (tokenEl && tokens) {
+      tokenEl.textContent = `${tokens} tokens`;
+    }
+
+    // Update progress bar (estimate based on tokens)
+    if (progressFill && tokens) {
+      // Rough estimate: assume 4000 max tokens, show progress
+      const estimatedProgress = Math.min((tokens / 4000) * 100, 95); // Cap at 95% until complete
+      progressFill.style.width = `${estimatedProgress}%`;
+    }
+  }
+
+  /**
+   * Complete streaming and convert to regular message
+   */
+  static completeStreaming(messageId: string, finalMessage: ChatMessage): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl || !messageEl.hasAttribute('data-streaming')) return;
+
+    // Complete and clean up buffer
+    const buffer = this.activeBuffers.get(messageId);
+    if (buffer) {
+      buffer.complete(); // Flush any remaining content
+      buffer.destroy();  // Clean up resources
+      this.activeBuffers.delete(messageId);
+    }
+
+    // Clean up markdown render timers
+    const timer = this.markdownRenderTimers.get(messageId);
+    if (timer) {
+      clearTimeout(timer);
+      this.markdownRenderTimers.delete(messageId);
+    }
+    this.lastMarkdownRender.delete(messageId);
+
+    // TEMPORARILY DISABLED: Final markdown render for testing
+    // const textEl = messageEl.querySelector('.streaming-text') as HTMLElement;
+    // if (textEl && finalMessage.content) {
+    //   const renderer = NoxMarkdownRenderer.getInstance();
+    //   textEl.innerHTML = renderer.render(finalMessage.content);
+    // }
+
+    // FOR TESTING: Keep as plain text to see if chaos still happens
+    console.log('🧪 TESTING: Markdown rendering disabled to isolate streaming chaos issue');
+
+    // Remove streaming attributes and classes
+    messageEl.removeAttribute('data-streaming');
+    messageEl.classList.remove('streaming');
+
+    // OPTIONAL: Scroll to bottom only if user was following along
+    // This is gentle and only happens once when streaming completes
+    this.optionalScrollToBottomOnComplete();
+
+    // Re-enable auto-scroll for next streaming session
+    this.autoScrollDisabled = false;
+
+    // Remove streaming-specific elements
+    const headerEl = messageEl.querySelector('.streaming-header');
+    const progressEl = messageEl.querySelector('.streaming-progress');
+    const cursorEl = messageEl.querySelector('.streaming-cursor');
+
+    if (headerEl) headerEl.remove();
+    if (progressEl) progressEl.remove();
+    if (cursorEl) cursorEl.remove();
+
+    // Update content with final rendered markdown
+    const contentEl = messageEl.querySelector('.message-content');
+    if (contentEl) {
+      contentEl.className = 'message-content'; // Remove streaming class
+
+      const textEl = contentEl.querySelector('.streaming-text');
+      if (textEl) {
+        textEl.className = 'nox-markdown'; // Remove streaming class
+
+        // Final markdown render
+        const renderer = NoxMarkdownRenderer.getInstance();
+        textEl.innerHTML = renderer.render(finalMessage.content);
+      }
+    }
+
+    // Add final message metadata
+    const metaEl = MessageComponent.createMessageMeta(finalMessage);
+    messageEl.appendChild(metaEl);
+
+    // Update message ID to match final message
+    messageEl.setAttribute('data-message-id', finalMessage.id);
+
+    // Hide scroll indicator when streaming completes
+    this.hideScrollIndicator();
+  }
+
+  /**
+   * Stop streaming request
+   */
+  private static stopStreaming(messageId: string): void {
+    try {
+      const vscode = acquireVsCodeApi();
+      vscode.postMessage({
+        type: 'streamStop',
+        messageId: messageId
+      });
+
+      // Update UI to show stopping state
+      const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageEl) {
+        const stopBtn = messageEl.querySelector('.stream-stop-btn') as HTMLButtonElement;
+        const progressText = messageEl.querySelector('.progress-text') as HTMLElement;
+
+        if (stopBtn) {
+          stopBtn.disabled = true;
+          stopBtn.innerHTML = '⏸️ Stopping...';
+        }
+
+        if (progressText) {
+          progressText.textContent = '⏸️ Stopping generation...';
+        }
+      }
+    } catch (error) {
+      console.error('Failed to stop streaming:', error);
+    }
+  }
+
+  /**
+   * Handle streaming error
+   */
+  static handleStreamingError(messageId: string, error: string): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl || !messageEl.hasAttribute('data-streaming')) return;
+
+    // Clean up buffer on error
+    const buffer = this.activeBuffers.get(messageId);
+    if (buffer) {
+      buffer.complete(); // Flush any remaining content
+      buffer.destroy();  // Clean up resources
+      this.activeBuffers.delete(messageId);
+    }
+
+    // Clean up markdown render timers
+    const timer = this.markdownRenderTimers.get(messageId);
+    if (timer) {
+      clearTimeout(timer);
+      this.markdownRenderTimers.delete(messageId);
+    }
+    this.lastMarkdownRender.delete(messageId);
+
+    // Update progress to show error
+    const progressText = messageEl.querySelector('.progress-text') as HTMLElement;
+    const stopBtn = messageEl.querySelector('.stream-stop-btn') as HTMLButtonElement;
+
+    if (progressText) {
+      progressText.innerHTML = '❌ Error occurred during streaming';
+      progressText.style.color = '#ef4444';
+    }
+
+    if (stopBtn) {
+      stopBtn.style.display = 'none';
+    }
+
+    // Add error message to content
+    const textEl = messageEl.querySelector('.streaming-text') as HTMLElement;
+    if (textEl) {
+      textEl.innerHTML += `<div class="streaming-error">❌ ${error}</div>`;
+    }
+  }
+
+  /**
+   * SIMPLE: Only expand container, NO scroll interference during streaming
+   */
+  private static expandContainerOnly(messageEl: HTMLElement, textEl: HTMLElement): void {
+    // Force height recalculation to accommodate new content
+    messageEl.style.height = 'auto';
+    textEl.style.height = 'auto';
+
+    // That's it! No scroll logic, no interference, just let the container grow
+    // User has complete scroll freedom during streaming
+  }
+
+  /**
+   * OPTIONAL: Gentle scroll to bottom only when streaming completes
+   */
+  private static optionalScrollToBottomOnComplete(): void {
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (!messagesContainer) return;
+
+    const scrollTop = messagesContainer.scrollTop;
+    const scrollHeight = messagesContainer.scrollHeight;
+    const clientHeight = messagesContainer.clientHeight;
+
+    // Only scroll if user was already near the bottom (within 200px)
+    // This suggests they were following along
+    const wasNearBottom = (scrollTop + clientHeight) >= (scrollHeight - 200);
+
+    if (wasNearBottom && !this.userHasScrolled) {
+      // Gentle scroll to show the complete response
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      console.log('📜 Gentle scroll to bottom - streaming complete');
+    } else {
+      console.log('🛑 User was reading elsewhere - no scroll interference');
+    }
+  }
+
+  /**
+   * Setup scroll listener to detect user scroll intent
+   */
+  private static setupScrollListener(): void {
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer && !messagesContainer.hasAttribute('data-scroll-listener')) {
+      messagesContainer.setAttribute('data-scroll-listener', 'true');
+
+      messagesContainer.addEventListener('scroll', () => {
+        this.userHasScrolled = true;
+        this.lastScrollTime = Date.now();
+      });
+    }
+  }
+
+  /**
+   * Ensure streaming content is visible and container expands properly
+   * NEVER hold the page hostage - respect user scroll freedom
+   */
+  private static ensureContentVisible(messageEl: HTMLElement, textEl: HTMLElement): void {
+    // Force height recalculation
+    messageEl.style.height = 'auto';
+
+    // Ensure the text container expands
+    textEl.style.height = 'auto';
+
+    // Setup scroll listener if not already done
+    this.setupScrollListener();
+
+    // MINIMAL auto-scroll: only if user is actively following at the very bottom
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer) {
+      const scrollTop = messagesContainer.scrollTop;
+      const scrollHeight = messagesContainer.scrollHeight;
+      const clientHeight = messagesContainer.clientHeight;
+
+      // Much longer grace period - if user scrolled in last 5 seconds, leave them alone
+      const recentlyScrolled = this.userHasScrolled && (Date.now() - this.lastScrollTime) < 5000;
+
+      // Very strict bottom detection - only auto-scroll if user is RIGHT at the bottom
+      const isRightAtBottom = (scrollTop + clientHeight) >= (scrollHeight - 5);
+
+      // RESPECT USER FREEDOM: No auto-scroll if disabled or user has scrolled
+      if (!this.autoScrollDisabled && isRightAtBottom && !recentlyScrolled) {
+        // User is actively following along - gentle scroll to show new content
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        this.hideScrollIndicator();
+      } else {
+        // User has scrolled up or wants to read - RESPECT THEIR FREEDOM
+        // Show indicator but DON'T force scroll
+        this.showScrollIndicator();
+
+        // If user scrolled up significantly, disable auto-scroll for this session
+        if (recentlyScrolled && (scrollHeight - scrollTop - clientHeight) > 100) {
+          this.autoScrollDisabled = true;
+          console.log('🛑 Auto-scroll disabled - user wants to read freely');
+        }
+      }
+    }
+  }
+
+  /**
+   * Show scroll indicator when user scrolls up during streaming
+   */
+  private static showScrollIndicator(): void {
+    let indicator = document.getElementById('streamScrollIndicator');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'streamScrollIndicator';
+      indicator.className = 'scroll-indicator';
+      indicator.innerHTML = 'New content below';
+      indicator.onclick = () => this.scrollToBottom();
+      document.body.appendChild(indicator);
+    }
+    indicator.classList.add('visible');
+  }
+
+  /**
+   * Hide scroll indicator
+   */
+  private static hideScrollIndicator(): void {
+    const indicator = document.getElementById('streamScrollIndicator');
+    if (indicator) {
+      indicator.classList.remove('visible');
+    }
+  }
+
+  /**
+   * Scroll to bottom and hide indicator
+   */
+  private static scrollToBottom(): void {
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    this.hideScrollIndicator();
+  }
+
+  /**
+   * Set global streaming speed for all new streams
+   */
+  static setStreamingSpeed(speed: 'slow' | 'medium' | 'fast' | 'instant'): void {
+    this.globalSpeed = speed;
+
+    // Update existing active buffers
+    this.activeBuffers.forEach(buffer => {
+      buffer.setSpeed(speed);
+    });
+
+    console.log(`🌊 Streaming speed set to: ${speed}`);
+  }
+
+  /**
+   * Get current streaming speed
+   */
+  static getStreamingSpeed(): string {
+    return this.globalSpeed;
+  }
+
+  /**
+   * Get available streaming speeds with descriptions
+   */
+  static getAvailableSpeeds(): Array<{value: string, label: string, description: string}> {
+    return [
+      { value: 'slow', label: 'Slow', description: 'Very readable, like careful typing (120ms)' },
+      { value: 'medium', label: 'Medium', description: 'Natural typing speed (60ms)' },
+      { value: 'fast', label: 'Fast', description: 'Quick but smooth (30ms)' },
+      { value: 'instant', label: 'Instant', description: 'No delay, current behavior' }
+    ];
   }
 }

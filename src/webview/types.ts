@@ -20,6 +20,11 @@ export interface SendMessageRequest extends BaseMessage {
   content: string;
 }
 
+export interface SendStreamingMessageRequest extends BaseMessage {
+  type: 'sendStreamingMessage';
+  content: string;
+}
+
 export interface ProviderChangeRequest extends BaseMessage {
   type: 'changeProvider';
   provider: string;
@@ -66,6 +71,31 @@ export interface RegenerateMessageRequest extends BaseMessage {
   messageId: string;
 }
 
+// Streaming message types
+export interface StreamStartRequest extends BaseMessage {
+  type: 'streamStart';
+  messageId: string;
+}
+
+export interface StreamChunkRequest extends BaseMessage {
+  type: 'streamChunk';
+  messageId: string;
+  chunk: string;
+  tokens?: number;
+  isComplete?: boolean;
+}
+
+export interface StreamStopRequest extends BaseMessage {
+  type: 'streamStop';
+  messageId: string;
+}
+
+export interface StreamCompleteRequest extends BaseMessage {
+  type: 'streamComplete';
+  messageId: string;
+  finalMessage: ChatMessage;
+}
+
 // Response message types
 export interface UserMessageResponse extends BaseMessage {
   type: 'userMessage';
@@ -101,6 +131,26 @@ export interface ProviderStatusResponse extends BaseMessage {
   currentProvider: string;
   currentModel: string;
   providers: Record<string, ProviderInfo>;
+}
+
+// Streaming response message types
+export interface StreamStartResponse extends BaseMessage {
+  type: 'streamStart';
+  messageId: string;
+}
+
+export interface StreamChunkResponse extends BaseMessage {
+  type: 'streamChunk';
+  messageId: string;
+  chunk: string;
+  tokens?: number;
+  isComplete?: boolean;
+}
+
+export interface StreamCompleteResponse extends BaseMessage {
+  type: 'streamComplete';
+  messageId: string;
+  finalMessage: ChatMessage;
 }
 
 // Chat message structure

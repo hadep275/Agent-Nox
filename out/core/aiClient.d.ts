@@ -78,6 +78,19 @@ declare class AIClient {
      */
     updateConfiguration(configuration: any): Promise<void>;
     /**
+     * 🌊 Send streaming request to AI provider - REAL-TIME IMPLEMENTATION
+     */
+    sendStreamingRequest(prompt: any, options?: {}, onChunk?: null, onComplete?: null, abortController?: null): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        timestamp: string;
+        tokens: number;
+        cost: number;
+        provider: string;
+        model: any;
+    }>;
+    /**
      * 🤖 Send request to AI provider - REAL IMPLEMENTATION
      */
     sendRequest(prompt: any, options?: {}): Promise<{
@@ -220,5 +233,61 @@ declare class AIClient {
      * Cleanup resources
      */
     cleanup(): Promise<void>;
+    /**
+     * 📊 Estimate token count for streaming progress
+     */
+    estimateTokens(text: any): number;
+    /**
+     * 🌊 Anthropic Claude Streaming API
+     */
+    callAnthropicStreamingAPI(apiKey: any, prompt: any, options: any, messageId: any, onChunk: any, onComplete: any, abortController?: null): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        timestamp: string;
+        tokens: number;
+        cost: number;
+        provider: string;
+        model: any;
+    }>;
+    /**
+     * 🌊 OpenAI GPT Streaming API
+     */
+    callOpenAIStreamingAPI(apiKey: any, prompt: any, options: any, messageId: any, onChunk: any, onComplete: any): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        timestamp: string;
+        tokens: number;
+        cost: number;
+        provider: string;
+        model: any;
+    }>;
+    /**
+     * 🌊 DeepSeek Streaming API
+     */
+    callDeepSeekStreamingAPI(apiKey: any, prompt: any, options: any, messageId: any, onChunk: any, onComplete: any): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        timestamp: string;
+        tokens: number;
+        cost: number;
+        provider: string;
+        model: any;
+    }>;
+    /**
+     * 🌊 Local LLM Streaming API (Ollama/LM Studio)
+     */
+    callLocalStreamingAPI(prompt: any, options: any, messageId: any, onChunk: any, onComplete: any): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        timestamp: string;
+        tokens: number;
+        cost: number;
+        provider: string;
+        model: any;
+    }>;
 }
 //# sourceMappingURL=aiClient.d.ts.map

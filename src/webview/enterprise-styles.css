@@ -232,6 +232,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative; /* For scroll indicator positioning */
 }
 
 .messages-container::-webkit-scrollbar {
@@ -996,4 +997,379 @@ body {
 /* Notification Animation */
 .notification {
   animation: fadeInOut 3s ease-in-out;
+}
+
+/* ========================================
+   🌊 STREAMING MESSAGE STYLES
+   ======================================== */
+
+/* Streaming Message Container */
+.message.streaming {
+  border-left: 3px solid var(--aurora-blue);
+  background: linear-gradient(
+    135deg,
+    rgba(76, 154, 255, 0.05),
+    rgba(139, 92, 246, 0.05)
+  );
+  border-radius: 12px;
+  overflow: visible; /* Allow content to expand beyond container */
+  height: auto; /* Allow dynamic height expansion */
+  min-height: auto; /* Remove any minimum height restrictions */
+  animation: streamingPulse 2s ease-in-out infinite;
+}
+
+@keyframes streamingPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 154, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(76, 154, 255, 0.1);
+  }
+}
+
+/* Streaming Header */
+.streaming-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.15),
+    rgba(76, 154, 255, 0.1)
+  );
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+  font-size: 12px;
+}
+
+.streaming-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--aurora-blue);
+}
+
+.streaming-badge {
+  background: linear-gradient(135deg, var(--aurora-blue), var(--aurora-purple));
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: badgePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Stop Button */
+.stream-stop-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stream-stop-btn:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+.stream-stop-btn:active {
+  transform: translateY(0);
+}
+
+.stream-stop-btn:disabled {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Streaming Content */
+.streaming-content {
+  position: relative;
+  padding: 12px;
+  min-height: 40px;
+  height: auto; /* Allow dynamic height expansion */
+  background: rgba(255, 255, 255, 0.02);
+  overflow: visible; /* Ensure content is visible */
+  flex-grow: 1; /* Allow content to expand within flex container */
+}
+
+.streaming-text {
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text-primary);
+  margin-right: 20px; /* Space for cursor */
+  height: auto; /* Allow text height to expand */
+  overflow: visible; /* Ensure text is visible */
+  max-height: none; /* Remove any height restrictions */
+}
+
+/* Streaming Cursor */
+.streaming-cursor {
+  color: var(--aurora-blue);
+  font-weight: bold;
+  font-size: 14px;
+  animation: cursorBlink 1s infinite;
+  margin-left: 2px;
+  display: inline-block;
+}
+
+@keyframes cursorBlink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Progress Section */
+.streaming-progress {
+  padding: 8px 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.08),
+    rgba(76, 154, 255, 0.05)
+  );
+  border-top: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.progress-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.token-count {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--aurora-purple);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 10px;
+}
+
+/* Progress Bar */
+.progress-bar {
+  height: 3px;
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--aurora-blue),
+    var(--aurora-purple),
+    var(--aurora-green)
+  );
+  width: 0%;
+  transition: width 0.3s ease;
+  animation: progressShimmer 2s ease-in-out infinite;
+  position: relative;
+}
+
+@keyframes progressShimmer {
+  0%,
+  100% {
+    opacity: 0.8;
+    transform: scaleX(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.02);
+  }
+}
+
+/* Streaming Error */
+.streaming-error {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.1),
+    rgba(220, 38, 38, 0.05)
+  );
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ===== STREAMING TOGGLE ===== */
+.streaming-toggle-container {
+  padding: 8px 16px;
+  margin-bottom: 8px;
+  background: rgba(64, 224, 208, 0.05);
+  border: 1px solid rgba(64, 224, 208, 0.2);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.streaming-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.streaming-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(64, 224, 208, 0.3);
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg, #40e0d0, #00ced1);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.streaming-toggle input:checked + .toggle-slider {
+  background: rgba(64, 224, 208, 0.2);
+  border-color: #40e0d0;
+}
+
+.streaming-toggle input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background: linear-gradient(135deg, #00ff7f, #40e0d0);
+  box-shadow: 0 2px 8px rgba(64, 224, 208, 0.4);
+}
+
+.toggle-label {
+  color: #40e0d0;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(64, 224, 208, 0.3);
+}
+
+.streaming-toggle:hover .toggle-slider {
+  border-color: #40e0d0;
+  box-shadow: 0 0 10px rgba(64, 224, 208, 0.2);
+}
+
+.streaming-toggle:hover .toggle-label {
+  text-shadow: 0 0 15px rgba(64, 224, 208, 0.5);
+}
+
+/* Responsive Design for Streaming */
+@media (max-width: 768px) {
+  .streaming-header {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .stream-stop-btn {
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  .streaming-content {
+    padding: 8px;
+  }
+
+  .streaming-progress {
+    padding: 6px 8px;
+  }
+
+  .progress-info {
+    font-size: 10px;
+  }
+}
+
+/* ========================================
+   SCROLL INDICATOR FOR STREAMING
+   ======================================== */
+
+/* Scroll Indicator for Streaming */
+.scroll-indicator {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  background: linear-gradient(135deg, var(--aurora-blue), var(--aurora-purple));
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(76, 154, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+}
+
+.scroll-indicator.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.scroll-indicator:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(76, 154, 255, 0.4);
+}
+
+.scroll-indicator::before {
+  content: "⬇️";
+  margin-right: 6px;
 }

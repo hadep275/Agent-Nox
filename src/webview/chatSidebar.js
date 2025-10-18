@@ -17,6 +17,7 @@ class NoxChatViewProvider {
     this.disposables = [];
     this.chatHistory = [];
     this.isAIResponding = false;
+    this.activeStreams = new Map(); // Track active streaming requests
   }
 
   /**
@@ -63,6 +64,14 @@ class NoxChatViewProvider {
           switch (message.type) {
             case "sendMessage":
               await this.handleUserMessage(message.content);
+              break;
+
+            case "sendStreamingMessage":
+              await this.handleStreamingMessage(message.content);
+              break;
+
+            case "streamStop":
+              await this.handleStreamStop(message.messageId);
               break;
 
             case "clearHistory":
@@ -240,6 +249,152 @@ class NoxChatViewProvider {
       this.sendErrorToWebview(error.message);
     } finally {
       this.isAIResponding = false;
+    }
+  }
+
+  /**
+   * 🌊 Handle streaming user message and get real-time AI response
+   */
+  async handleStreamingMessage(userMessage) {
+    if (!userMessage?.trim()) {
+      return;
+    }
+
+    if (this.isAIResponding) {
+      this.sendMessageToWebview({
+        type: "error",
+        message: "Please wait for the current response to complete.",
+      });
+      return;
+    }
+
+    // Generate unique message ID for streaming (declare outside try block)
+    const streamingMessageId = (Date.now() + 1).toString();
+
+    try {
+      this.isAIResponding = true;
+
+      // Add user message to history
+      const userMessageObj = {
+        id: Date.now().toString(),
+        type: "user",
+        content: userMessage,
+        timestamp: new Date().toISOString(),
+      };
+
+      this.chatHistory.push(userMessageObj);
+      this.saveChatHistory();
+
+      // Send user message to webview
+      this.sendMessageToWebview({
+        type: "userMessage",
+        message: userMessageObj,
+      });
+
+      // Create abort controller for this stream
+      const abortController = new AbortController();
+      this.activeStreams.set(streamingMessageId, abortController);
+
+      // Start streaming UI
+      this.sendMessageToWebview({
+        type: "streamStart",
+        messageId: streamingMessageId,
+      });
+
+      // Set up streaming callbacks
+      const onChunk = (chunkData) => {
+        this.sendMessageToWebview({
+          type: "streamChunk",
+          messageId: chunkData.messageId,
+          chunk: chunkData.chunk,
+          tokens: chunkData.tokens,
+          isComplete: chunkData.isComplete,
+        });
+      };
+
+      const onComplete = (finalMessage) => {
+        // Add final message to history
+        this.chatHistory.push(finalMessage);
+        this.saveChatHistory();
+
+        // Send completion to webview
+        this.sendMessageToWebview({
+          type: "streamComplete",
+          messageId: streamingMessageId,
+          finalMessage: finalMessage,
+        });
+
+        // Clean up active stream
+        this.activeStreams.delete(streamingMessageId);
+
+        this.logger.info(
+          `🌊 Streaming chat exchange completed (${
+            finalMessage.tokens || 0
+          } tokens)`
+        );
+      };
+
+      // Get streaming AI response
+      await this.agentController.aiClient.sendStreamingRequest(
+        userMessage,
+        {
+          maxTokens: 4000,
+          messageId: streamingMessageId,
+        },
+        onChunk,
+        onComplete,
+        abortController
+      );
+    } catch (error) {
+      this.logger.error("Error in streaming chat exchange:", error);
+
+      // Clean up active stream
+      this.activeStreams.delete(streamingMessageId);
+
+      // Send streaming error
+      this.sendMessageToWebview({
+        type: "streamError",
+        messageId: streamingMessageId,
+        error: error.message,
+      });
+
+      this.sendErrorToWebview(error.message);
+    } finally {
+      this.isAIResponding = false;
+    }
+  }
+
+  /**
+   * ⏹️ Handle stream stop request
+   */
+  async handleStreamStop(messageId) {
+    try {
+      this.logger.info(`⏹️ Stopping stream: ${messageId}`);
+
+      // Get the abort controller for this stream
+      const abortController = this.activeStreams.get(messageId);
+
+      if (abortController) {
+        // Abort the request
+        abortController.abort();
+
+        // Clean up
+        this.activeStreams.delete(messageId);
+        this.isAIResponding = false;
+
+        this.sendMessageToWebview({
+          type: "streamStopped",
+          messageId: messageId,
+        });
+
+        this.logger.info(`⏹️ Stream stopped successfully: ${messageId}`);
+      } else {
+        this.logger.warn(
+          `⏹️ No active stream found for messageId: ${messageId}`
+        );
+      }
+    } catch (error) {
+      this.logger.error("Error stopping stream:", error);
     }
   }
 
@@ -667,6 +822,15 @@ class NoxChatViewProvider {
                         <div class="bundled-indicator">✨ Enterprise Bundle</div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Streaming Toggle -->
+            <div class="streaming-toggle-container">
+                <label class="streaming-toggle">
+                    <input type="checkbox" id="streamingToggle" checked>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">🌊 Real-time Streaming</span>
+                </label>
             </div>
 
             <!-- Input Area -->

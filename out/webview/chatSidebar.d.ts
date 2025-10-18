@@ -13,6 +13,7 @@ declare class NoxChatViewProvider {
     disposables: any[];
     chatHistory: any[];
     isAIResponding: boolean;
+    activeStreams: Map<any, any>;
     /**
      * 🎨 WebviewViewProvider interface - called when view is first shown
      */
@@ -25,6 +26,14 @@ declare class NoxChatViewProvider {
      * 🤖 Handle user message and get AI response
      */
     handleUserMessage(userMessage: any): Promise<void>;
+    /**
+     * 🌊 Handle streaming user message and get real-time AI response
+     */
+    handleStreamingMessage(userMessage: any): Promise<void>;
+    /**
+     * ⏹️ Handle stream stop request
+     */
+    handleStreamStop(messageId: any): Promise<void>;
     /**
      * 📨 Send message to webview
      */
