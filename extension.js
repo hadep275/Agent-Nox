@@ -382,6 +382,11 @@ class NoxExtension {
               await this.setVoiceLanguage(message.language);
               await this.sendVoiceStatus(panel.webview);
               break;
+            case "openDashboard":
+              // Close settings panel and open dashboard
+              panel.dispose();
+              await this.showDashboard();
+              break;
             default:
               this.logger.warn(
                 `Unknown settings message type: ${message.type}`
@@ -443,6 +448,128 @@ class NoxExtension {
     } catch (error) {
       this.logger.error("Failed to set up event listeners:", error);
     }
+  }
+
+  /**
+   * 📊 Get dashboard panel HTML content
+   */
+  getDashboardPanelContent(webview) {
+    const nonce = this.getNonce();
+    const dashboardVendorsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "webview",
+        "dashboardVendors.js"
+      )
+    );
+    const dashboardUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "webview",
+        "dashboardPanel.js"
+      )
+    );
+    const stylesUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "src",
+        "webview",
+        "dashboard-styles.css"
+      )
+    );
+
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net;">
+        <link rel="stylesheet" href="${stylesUri}">
+        <script nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+        <title>📊 Nox Performance Dashboard</title>
+    </head>
+    <body>
+        <div class="dashboard-container">
+            <div class="dashboard-header">
+                <div class="dashboard-title-section">
+                    <button id="backBtn" class="back-btn" title="Back to Settings">←</button>
+                    <h1 class="dashboard-title">Performance Dashboard</h1>
+                </div>
+                <div class="dashboard-controls">
+                    <select id="filterSelect" class="filter-select">
+                        <option value="lifetime">Lifetime</option>
+                        <option value="last7days">Last 7 Days</option>
+                        <option value="last30days">Last 30 Days</option>
+                        <option value="last90days">Last 90 Days</option>
+                        <option value="last365days">Last 365 Days</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <div class="export-dropdown-container">
+                        <button id="exportBtn" class="export-btn">📥 Export ▼</button>
+                        <div id="exportMenu" class="export-menu" style="display: none;">
+                            <button class="export-menu-item" data-format="json">📄 Export JSON</button>
+                            <button class="export-menu-item" data-format="csv">📊 Export CSV</button>
+                            <button class="export-menu-item" data-format="pdf">📑 Export PDF</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Date Range (hidden by default) -->
+            <div id="customDateRange" style="display: none; margin-bottom: 20px; padding: 16px; background: rgba(76, 154, 255, 0.05); border-radius: 8px;">
+                <label>Start Date: <input type="date" id="customDateStart"></label>
+                <label style="margin-left: 16px;">End Date: <input type="date" id="customDateEnd"></label>
+                <button id="applyCustomBtn" class="filter-select" style="margin-left: 16px;">Apply</button>
+            </div>
+
+            <!-- Summary Cards -->
+            <div id="summaryCards" class="summary-cards">
+                <div class="summary-card">
+                    <div class="card-label">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div id="chartsGrid" class="charts-grid">
+                <div class="chart-container">
+                    <div class="chart-title">💰 Cost Breakdown by Provider</div>
+                    <canvas id="costBreakdownChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">📈 Cost Trends</div>
+                    <canvas id="costTrendsChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">📊 Messages per Day</div>
+                    <canvas id="messagesPerDayChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Tables -->
+            <div id="tableContainer"></div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="loading" style="display: none;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <script nonce="${nonce}" src="${dashboardVendorsUri}"></script>
+        <script nonce="${nonce}" src="${dashboardUri}"></script>
+        <script nonce="${nonce}">
+            // Back button handler - use the vscode API from dashboardPanel
+            document.addEventListener('DOMContentLoaded', () => {
+                document.getElementById('backBtn')?.addEventListener('click', () => {
+                    // Get vscode from window if available, otherwise create it
+                    const vscode = window.vscode || acquireVsCodeApi();
+                    vscode.postMessage({ type: 'backToSettings' });
+                });
+            });
+        </script>
+    </body>
+    </html>`;
   }
 
   /**
@@ -819,7 +946,10 @@ class NoxExtension {
                     <p>Monitor your Nox usage and performance metrics.</p>
                     <div class="provider-card">
                         <h3>📈 Usage Statistics</h3>
-                        <p>Coming soon - detailed analytics and performance metrics</p>
+                        <p>View detailed analytics about your Nox usage, including cost breakdown by provider, token efficiency, and daily trends.</p>
+                        <button id="openDashboardBtn" style="margin-top: 16px; padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                            🚀 Open Dashboard
+                        </button>
                     </div>
                 </div>
 
@@ -1453,6 +1583,11 @@ class NoxExtension {
             window.addEventListener('load', () => {
                 initializeVoiceSettings();
             });
+
+            // Dashboard button handler
+            document.getElementById('openDashboardBtn')?.addEventListener('click', () => {
+                vscode.postMessage({ type: 'openDashboard' });
+            });
         </script>
     </body>
     </html>`;
@@ -2042,8 +2177,62 @@ class NoxExtension {
    * Show performance dashboard
    */
   async showDashboard() {
-    // TODO: Implement dashboard panel
-    vscode.window.showInformationMessage("Dashboard coming soon!");
+    try {
+      // Create dashboard panel
+      const panel = vscode.window.createWebviewPanel(
+        "noxDashboard",
+        "📊 Nox Performance Dashboard",
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: [this.context.extensionUri],
+        }
+      );
+
+      // Set the HTML content
+      panel.webview.html = this.getDashboardPanelContent(panel.webview);
+
+      // Handle messages from the dashboard
+      panel.webview.onDidReceiveMessage(async (message) => {
+        if (message.type === "getAnalyticsData") {
+          try {
+            // Get chat history from sidebar provider
+            const chatHistory = this.chatSidebarProvider?.chatHistory || [];
+
+            // Create analytics engine
+            const AnalyticsEngine = require("./src/core/analyticsEngine.js");
+            const analyticsEngine = new AnalyticsEngine(this.logger);
+
+            // Get analytics report
+            const report = analyticsEngine.getAnalyticsReport(
+              chatHistory,
+              message.filterType,
+              message.customDates
+            );
+
+            // Send data back to dashboard
+            panel.webview.postMessage({
+              type: "analyticsData",
+              data: report,
+            });
+          } catch (error) {
+            this.logger.error("Failed to get analytics data:", error);
+            panel.webview.postMessage({
+              type: "error",
+              message: "Failed to load analytics data",
+            });
+          }
+        } else if (message.type === "backToSettings") {
+          // Close dashboard and reopen settings
+          panel.dispose();
+          await this.openSettingsPanel();
+        }
+      });
+    } catch (error) {
+      this.logger.error("Failed to show dashboard:", error);
+      vscode.window.showErrorMessage("Failed to open Performance Dashboard");
+    }
   }
 
   /**

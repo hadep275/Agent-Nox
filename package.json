@@ -323,6 +323,8 @@
     "chroma-js": "^2.4.2",
     "dompurify": "^3.3.0",
     "highlight.js": "^11.11.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.3",
     "marked": "^9.1.6",
     "microsoft-cognitiveservices-speech-sdk": "^1.46.0",
     "node-record-lpcm16": "^1.0.1",

@@ -90,17 +90,20 @@ class NoxChatViewProvider {
               await this.sendProviderStatus();
               break;
 
+            case "confirmDelete":
+              // Send confirmation request to webview
+              this.sendMessageToWebview({
+                type: "confirmDelete",
+                messageId: message.messageId,
+              });
+              break;
+
             case "deleteMessage":
-              // TODO: Implement delete message functionality
-              this.logger.info("Delete message requested:", message.messageId);
+              await this.handleDeleteMessage(message.messageId);
               break;
 
             case "regenerateMessage":
-              // TODO: Implement regenerate message functionality
-              this.logger.info(
-                "Regenerate message requested:",
-                message.messageId
-              );
+              await this.handleRegenerateMessage(message.messageId);
               break;
 
             case "clearChat":
@@ -283,6 +286,132 @@ class NoxChatViewProvider {
     await this.saveChatHistory();
     this.sendMessageToWebview({ type: "clearMessages" });
     this.logger.info("🦊 Chat history cleared");
+  }
+
+  /**
+   * 🗑️ Delete a specific message
+   */
+  async handleDeleteMessage(messageId) {
+    try {
+      this.logger.info(`🗑️ Deleting message: ${messageId}`);
+
+      // Find and remove the message from history
+      const messageIndex = this.chatHistory.findIndex(
+        (msg) => msg.id === messageId
+      );
+      if (messageIndex === -1) {
+        throw new Error("Message not found");
+      }
+
+      const deletedMessage = this.chatHistory[messageIndex];
+      this.chatHistory.splice(messageIndex, 1);
+
+      // Save updated history
+      await this.saveChatHistory();
+
+      // Notify webview that message was deleted
+      this.sendMessageToWebview({
+        type: "messageDeleted",
+        messageId: messageId,
+      });
+
+      this.logger.info(`🗑️ Message deleted successfully: ${messageId}`);
+    } catch (error) {
+      this.logger.error("Failed to delete message:", error);
+      this.sendErrorToWebview(`Failed to delete message: ${error.message}`);
+    }
+  }
+
+  /**
+   * 🔄 Regenerate an assistant message
+   */
+  async handleRegenerateMessage(messageId) {
+    try {
+      this.logger.info(`🔄 Regenerating message: ${messageId}`);
+
+      // Find the assistant message
+      const messageIndex = this.chatHistory.findIndex(
+        (msg) => msg.id === messageId
+      );
+      if (messageIndex === -1) {
+        throw new Error("Message not found");
+      }
+
+      const assistantMessage = this.chatHistory[messageIndex];
+      if (assistantMessage.type !== "assistant") {
+        throw new Error("Can only regenerate assistant messages");
+      }
+
+      // Find the preceding user message
+      let userMessageIndex = messageIndex - 1;
+      while (
+        userMessageIndex >= 0 &&
+        this.chatHistory[userMessageIndex].type !== "user"
+      ) {
+        userMessageIndex--;
+      }
+
+      if (userMessageIndex < 0) {
+        throw new Error("No user message found to regenerate from");
+      }
+
+      const userMessage = this.chatHistory[userMessageIndex];
+
+      // Show thinking indicator
+      this.sendMessageToWebview({
+        type: "aiThinking",
+        thinking: true,
+      });
+
+      // Get new AI response
+      const aiResponse = await this.agentController.aiClient.sendRequest(
+        userMessage.content,
+        { maxTokens: 4000 }
+      );
+
+      // Hide thinking indicator
+      this.sendMessageToWebview({
+        type: "aiThinking",
+        thinking: false,
+      });
+
+      // Create new message object
+      const newMessage = {
+        id: (Date.now() + Math.random()).toString(),
+        type: "assistant",
+        content: aiResponse.content,
+        timestamp: new Date().toISOString(),
+        tokens: aiResponse.tokens || 0,
+        cost: aiResponse.cost || 0,
+        provider: aiResponse.provider || "unknown",
+        model: aiResponse.model || "unknown",
+      };
+
+      // Replace old message with new one
+      this.chatHistory[messageIndex] = newMessage;
+      await this.saveChatHistory();
+
+      // Notify webview that message was regenerated
+      this.sendMessageToWebview({
+        type: "messageRegenerated",
+        oldMessageId: messageId,
+        newMessage: newMessage,
+      });
+
+      this.logger.info(
+        `🔄 Message regenerated successfully: ${messageId} -> ${newMessage.id}`
+      );
+    } catch (error) {
+      this.logger.error("Failed to regenerate message:", error);
+
+      // Hide thinking indicator on error
+      this.sendMessageToWebview({
+        type: "aiThinking",
+        thinking: false,
+      });
+
+      this.sendErrorToWebview(`Failed to regenerate message: ${error.message}`);
+    }
   }
 
   /**

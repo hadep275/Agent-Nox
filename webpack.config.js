@@ -104,5 +104,44 @@ module.exports = (env, argv) => {
         },
       },
     },
+
+    // Dashboard Panel Bundle (Browser environment)
+    {
+      name: "dashboard",
+      target: "web",
+      mode: isProduction ? "production" : "development",
+      entry: "./src/webview/dashboardPanel.js",
+      output: {
+        path: path.resolve(__dirname, "out/webview"),
+        filename: "dashboardPanel.js",
+        clean: false,
+      },
+      resolve: {
+        extensions: [".js", ".css"],
+      },
+      module: {
+        rules: [
+          {
+            test: /\.css$/,
+            use: ["style-loader", "css-loader"],
+          },
+        ],
+      },
+      devtool: isProduction ? "source-map" : "eval-source-map",
+      optimization: {
+        minimize: isProduction,
+        splitChunks: {
+          chunks: "all",
+          cacheGroups: {
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: "dashboardVendors",
+              chunks: "all",
+              filename: "dashboardVendors.js",
+            },
+          },
+        },
+      },
+    },
   ];
 };

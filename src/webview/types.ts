@@ -51,6 +51,21 @@ export interface ProviderSectionToggledRequest extends BaseMessage {
   collapsed: boolean;
 }
 
+export interface ConfirmDeleteRequest extends BaseMessage {
+  type: 'confirmDelete';
+  messageId: string;
+}
+
+export interface DeleteMessageRequest extends BaseMessage {
+  type: 'deleteMessage';
+  messageId: string;
+}
+
+export interface RegenerateMessageRequest extends BaseMessage {
+  type: 'regenerateMessage';
+  messageId: string;
+}
+
 // Response message types
 export interface UserMessageResponse extends BaseMessage {
   type: 'userMessage';

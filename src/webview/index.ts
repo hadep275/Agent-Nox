@@ -62,6 +62,8 @@ class NoxChatApp {
 
   constructor() {
     this.vscode = acquireVsCodeApi();
+    // Store vscode API globally so components can access it
+    (window as any).vscodeApi = this.vscode;
     this.state = this.initializeState();
     this.initialize();
   }
@@ -337,6 +339,10 @@ class NoxChatApp {
 
       case 'voiceStatus':
         this.handleVoiceStatus(message.status);
+        break;
+
+      case 'confirmDelete':
+        this.handleConfirmDelete(message.messageId);
         break;
 
       default:
@@ -1096,6 +1102,61 @@ class NoxChatApp {
       type: 'startVoiceRecording'
     });
     console.log('🎤 Starting simple voice recording via extension');
+  }
+
+  /**
+   * Handle delete confirmation from user
+   */
+  private handleConfirmDelete(messageId: string): void {
+    // Show a visual confirmation in the UI instead of a modal
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl) return;
+
+    // Find the delete button
+    const deleteBtn = messageEl.querySelector('.message-action-btn.delete') as HTMLButtonElement;
+    if (!deleteBtn) return;
+
+    // Change button appearance to show confirmation state
+    const originalText = deleteBtn.textContent;
+    deleteBtn.textContent = '🗑️ Confirm?';
+    deleteBtn.style.background = 'rgba(244, 114, 182, 0.3)';
+    deleteBtn.style.borderColor = 'var(--aurora-pink)';
+
+    // Create a cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'message-action-btn';
+    cancelBtn.textContent = '❌ Cancel';
+    cancelBtn.style.color = 'var(--aurora-blue)';
+    cancelBtn.style.borderColor = 'rgba(76, 154, 255, 0.3)';
+    cancelBtn.style.background = 'rgba(76, 154, 255, 0.1)';
+
+    // Insert cancel button next to delete button
+    deleteBtn.parentNode?.insertBefore(cancelBtn, deleteBtn.nextSibling);
+
+    // Handle confirm
+    const confirmHandler = () => {
+      this.sendMessage({
+        type: 'deleteMessage',
+        messageId: messageId
+      } as any);
+      deleteBtn.textContent = originalText;
+      deleteBtn.style.background = '';
+      deleteBtn.style.borderColor = '';
+      deleteBtn.onclick = () => this.handleConfirmDelete(messageId);
+      cancelBtn.remove();
+    };
+
+    // Handle cancel
+    const cancelHandler = () => {
+      deleteBtn.textContent = originalText;
+      deleteBtn.style.background = '';
+      deleteBtn.style.borderColor = '';
+      deleteBtn.onclick = () => this.handleConfirmDelete(messageId);
+      cancelBtn.remove();
+    };
+
+    deleteBtn.onclick = confirmHandler;
+    cancelBtn.onclick = cancelHandler;
   }
 }
 

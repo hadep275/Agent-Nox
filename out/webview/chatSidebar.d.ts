@@ -42,6 +42,14 @@ declare class NoxChatViewProvider {
      */
     clearChatHistory(): void;
     /**
+     * 🗑️ Delete a specific message
+     */
+    handleDeleteMessage(messageId: any): Promise<void>;
+    /**
+     * 🔄 Regenerate an assistant message
+     */
+    handleRegenerateMessage(messageId: any): Promise<void>;
+    /**
      * 🔄 Handle provider change
      */
     handleProviderChange(provider: any): Promise<void>;

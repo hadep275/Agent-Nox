@@ -204,7 +204,8 @@ export class MessageComponent {
    */
   private static regenerateMessage(message: ChatMessage): void {
     // Send message to extension to regenerate
-    const vscode = (window as any).acquireVsCodeApi();
+    // Note: Use the global vscode API that's already acquired
+    const vscode = (window as any).vscodeApi || (window as any).acquireVsCodeApi();
     vscode.postMessage({
       type: 'regenerateMessage',
       messageId: message.id
@@ -215,14 +216,12 @@ export class MessageComponent {
    * Delete message
    */
   private static deleteMessage(message: ChatMessage): void {
-    if (confirm('Are you sure you want to delete this message?')) {
-      // Send message to extension to delete
-      const vscode = (window as any).acquireVsCodeApi();
-      vscode.postMessage({
-        type: 'deleteMessage',
-        messageId: message.id
-      });
-    }
+    // Show confirmation via extension instead of browser confirm (which is blocked in sandboxed webview)
+    const vscode = (window as any).vscodeApi || (window as any).acquireVsCodeApi();
+    vscode.postMessage({
+      type: 'confirmDelete',
+      messageId: message.id
+    });
   }
 }
 
