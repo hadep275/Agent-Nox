@@ -441,6 +441,7 @@ class StreamingBuffer {
   private timer: NodeJS.Timeout | null = null;
   private messageId: string;
   private onFlush: (content: string) => void;
+  public isStopped: boolean = false; // NEW: Track stopped state
 
   // Speed presets for natural typing experience
   private static readonly SPEED_PRESETS = {
@@ -461,6 +462,12 @@ class StreamingBuffer {
    * Add chunk to buffer with smart batching
    */
   addChunk(chunk: string): void {
+    // NEW: Stop processing if buffer is stopped
+    if (this.isStopped) {
+      console.log(`🛑 Buffer stopped - ignoring chunk for message: ${this.messageId}`);
+      return;
+    }
+
     this.buffer += chunk;
 
     const preset = StreamingBuffer.SPEED_PRESETS[this.currentSpeed];
@@ -484,12 +491,20 @@ class StreamingBuffer {
    * Schedule buffer flush with natural timing
    */
   private scheduleFlush(delay: number): void {
+    // NEW: Don't schedule if stopped
+    if (this.isStopped) {
+      return;
+    }
+
     if (this.timer) {
       clearTimeout(this.timer);
     }
 
     this.timer = setTimeout(() => {
-      this.flushBuffer();
+      // NEW: Check stopped state before flushing
+      if (!this.isStopped) {
+        this.flushBuffer();
+      }
       this.timer = null;
     }, delay);
   }
@@ -532,6 +547,32 @@ class StreamingBuffer {
    */
   setSpeed(speed: keyof typeof StreamingBuffer.SPEED_PRESETS): void {
     this.currentSpeed = speed;
+  }
+
+  /**
+   * NEW: Stop buffer processing immediately
+   */
+  stop(): void {
+    console.log(`🛑 Stopping buffer for message: ${this.messageId}`);
+    this.isStopped = true;
+
+    // Clear any pending timer
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+
+    // Flush any remaining content immediately
+    if (this.buffer.length > 0) {
+      this.flushBuffer();
+    }
+  }
+
+  /**
+   * NEW: Check if buffer is stopped
+   */
+  isBufferStopped(): boolean {
+    return this.isStopped;
   }
 }
 
@@ -616,16 +657,6 @@ export class StreamingMessageComponent {
     const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!messageEl || !messageEl.hasAttribute('data-streaming')) return;
 
-    // If this is a continued stream, restore the stop button
-    const continueBtn = messageEl.querySelector('.stream-continue-btn') as HTMLButtonElement;
-    if (continueBtn) {
-      continueBtn.disabled = false;
-      continueBtn.innerHTML = '⏹️ Stop';
-      continueBtn.title = 'Stop generating response';
-      continueBtn.className = 'stream-stop-btn';
-      continueBtn.onclick = () => this.stopStreaming(messageId);
-    }
-
     // Get or create buffer for this message
     let buffer = this.activeBuffers.get(messageId);
     if (!buffer) {
@@ -634,6 +665,12 @@ export class StreamingMessageComponent {
       });
       buffer.setSpeed(this.globalSpeed); // Use global speed setting
       this.activeBuffers.set(messageId, buffer);
+    }
+
+    // If buffer is stopped, don't process new chunks (stream was stopped by user)
+    if (buffer.isStopped) {
+      console.log(`🛑 Buffer is stopped - ignoring chunk for message: ${messageId}`);
+      return;
     }
 
     // Add chunk to buffer for natural typing speed
@@ -786,33 +823,114 @@ export class StreamingMessageComponent {
   }
 
   /**
+   * NEW: Stop streaming buffer immediately
+   */
+  static stopStreamingBuffer(messageId: string): void {
+    const buffer = this.activeBuffers.get(messageId);
+    if (buffer) {
+      console.log(`🛑 Stopping streaming buffer for message: ${messageId}`);
+      buffer.stop();
+    } else {
+      console.warn(`🛑 No active buffer found for message: ${messageId}`);
+    }
+  }
+
+  /**
+   * NEW: Update stop/continue button state with immediate visual feedback
+   */
+  private static updateStopButtonState(messageId: string, state: 'stopping' | 'stopped' | 'continuing'): void {
+    const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageEl) {
+      console.warn(`🛑 Message element not found for: ${messageId}`);
+      return;
+    }
+
+    const stopBtn = messageEl.querySelector('.stream-stop-btn, .stream-continue-btn') as HTMLButtonElement;
+    const progressText = messageEl.querySelector('.progress-text') as HTMLElement;
+    const cursorEl = messageEl.querySelector('.streaming-cursor') as HTMLElement;
+
+    if (!stopBtn) {
+      console.warn(`🛑 Stop button not found for: ${messageId}`);
+      return;
+    }
+
+    console.log(`🛑 Updating button state to: ${state} for message: ${messageId}`);
+
+    switch (state) {
+      case 'stopping':
+        stopBtn.disabled = true;
+        stopBtn.innerHTML = '⏸️ Stopping...';
+        stopBtn.title = 'Stopping generation...';
+        if (progressText) {
+          progressText.textContent = '⏸️ Stopping generation...';
+        }
+        // Hide cursor immediately
+        if (cursorEl) {
+          cursorEl.style.display = 'none';
+        }
+        // Stop any progress animations
+        const progressContainer = messageEl.querySelector('.progress-container') as HTMLElement;
+        if (progressContainer) {
+          progressContainer.style.display = 'none';
+        }
+        break;
+
+      case 'stopped':
+        stopBtn.disabled = false;
+        stopBtn.innerHTML = '▶️ Continue';
+        stopBtn.title = 'Continue generating response';
+        stopBtn.className = 'stream-continue-btn';
+        stopBtn.onclick = () => this.continueStreaming(messageId);
+        if (progressText) {
+          progressText.textContent = '⏸️ Generation stopped - Click Continue to resume';
+        }
+        // Keep cursor hidden
+        if (cursorEl) {
+          cursorEl.style.display = 'none';
+        }
+        break;
+
+      case 'continuing':
+        stopBtn.disabled = true;
+        stopBtn.innerHTML = '⏳ Resuming...';
+        stopBtn.title = 'Resuming generation...';
+        stopBtn.className = 'stream-stop-btn'; // Will change back to stop when streaming resumes
+        if (progressText) {
+          progressText.textContent = '⏳ Resuming generation...';
+        }
+        // Show cursor again
+        if (cursorEl) {
+          cursorEl.style.display = 'inline';
+        }
+        break;
+    }
+  }
+
+  /**
    * Stop streaming request
    */
   private static stopStreaming(messageId: string): void {
     try {
+      console.log(`🛑 FRONTEND: Stop streaming requested for message: ${messageId}`);
+
+      // NEW: Stop buffer processing immediately
+      this.stopStreamingBuffer(messageId);
+
+      // NEW: Update UI immediately to show stopping state
+      this.updateStopButtonState(messageId, 'stopping');
+
       const vscode = (window as any).vscodeApi || (window as any).acquireVsCodeApi();
+      console.log(`🛑 FRONTEND: Sending streamStop message to backend for: ${messageId}`);
+
       vscode.postMessage({
         type: 'streamStop',
         messageId: messageId
       });
 
-      // Update UI to show stopping state
-      const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
-      if (messageEl) {
-        const stopBtn = messageEl.querySelector('.stream-stop-btn') as HTMLButtonElement;
-        const progressText = messageEl.querySelector('.progress-text') as HTMLElement;
+      console.log(`🛑 FRONTEND: streamStop message sent for: ${messageId}`);
 
-        if (stopBtn) {
-          stopBtn.disabled = true;
-          stopBtn.innerHTML = '⏸️ Stopping...';
-        }
-
-        if (progressText) {
-          progressText.textContent = '⏸️ Stopping generation...';
-        }
-      }
     } catch (error) {
-      console.error('Failed to stop streaming:', error);
+      console.error('🛑 FRONTEND: Failed to stop streaming:', error);
     }
   }
 
@@ -868,6 +986,9 @@ export class StreamingMessageComponent {
 
     console.log('⏹️ Handling stream stopped for message:', messageId);
 
+    // NEW: Stop buffer processing and clean up
+    this.stopStreamingBuffer(messageId);
+
     // Flush any remaining content in buffer
     const buffer = this.activeBuffers.get(messageId);
     if (buffer) {
@@ -875,36 +996,13 @@ export class StreamingMessageComponent {
       // Don't destroy buffer yet - we might need to continue
     }
 
-    // Update UI elements
-    const statusEl = messageEl.querySelector('.streaming-status');
-    const stopBtn = messageEl.querySelector('.stream-stop-btn') as HTMLButtonElement;
-    const progressText = messageEl.querySelector('.progress-text');
-    const cursorEl = messageEl.querySelector('.streaming-cursor');
+    // NEW: Update button state to stopped with continue option
+    this.updateStopButtonState(messageId, 'stopped');
 
     // Update status to show stopped state
+    const statusEl = messageEl.querySelector('.streaming-status');
     if (statusEl) {
       statusEl.innerHTML = '🤖 Assistant <span class="streaming-badge stopped">STOPPED</span>';
-    }
-
-    // Change stop button to continue button
-    if (stopBtn) {
-      stopBtn.disabled = false;
-      stopBtn.innerHTML = '▶️ Continue';
-      stopBtn.title = 'Continue generating response';
-      stopBtn.className = 'stream-continue-btn'; // Change class for styling
-
-      // Update click handler to continue streaming
-      stopBtn.onclick = () => this.continueStreaming(messageId);
-    }
-
-    // Update progress text
-    if (progressText) {
-      progressText.textContent = '⏸️ Generation stopped - Click Continue to resume';
-    }
-
-    // Hide cursor since we're not actively streaming
-    if (cursorEl) {
-      (cursorEl as HTMLElement).style.display = 'none';
     }
 
     // Mark message as stopped (but still streaming-capable)
@@ -918,41 +1016,36 @@ export class StreamingMessageComponent {
    */
   private static continueStreaming(messageId: string): void {
     try {
+      console.log(`▶️ Continue streaming requested for message: ${messageId}`);
+
+      // NEW: Update UI immediately to show continuing state
+      this.updateStopButtonState(messageId, 'continuing');
+
+      // Update status to show streaming again
+      const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageEl) {
+        const statusEl = messageEl.querySelector('.streaming-status');
+        if (statusEl) {
+          statusEl.innerHTML = '🤖 Assistant <span class="streaming-badge">STREAMING</span>';
+        }
+
+        // Remove stopped attribute
+        messageEl.removeAttribute('data-streaming-stopped');
+      }
+
+      // Reset buffer's stopped state so it can process new chunks
+      const buffer = this.activeBuffers.get(messageId);
+      if (buffer) {
+        buffer.isStopped = false;
+        console.log(`🔄 Resetting stopped buffer for explicit continue: ${messageId}`);
+      }
+
       const vscode = (window as any).vscodeApi || (window as any).acquireVsCodeApi();
       vscode.postMessage({
         type: 'streamContinue',
         messageId: messageId
       });
 
-      // Update UI to show resuming state
-      const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
-      if (messageEl) {
-        const continueBtn = messageEl.querySelector('.stream-continue-btn') as HTMLButtonElement;
-        const progressText = messageEl.querySelector('.progress-text') as HTMLElement;
-        const statusEl = messageEl.querySelector('.streaming-status');
-        const cursorEl = messageEl.querySelector('.streaming-cursor');
-
-        if (continueBtn) {
-          continueBtn.disabled = true;
-          continueBtn.innerHTML = '🔄 Resuming...';
-          continueBtn.title = 'Resuming generation...';
-        }
-
-        if (progressText) {
-          progressText.textContent = '🔄 Resuming generation...';
-        }
-
-        if (statusEl) {
-          statusEl.innerHTML = '🤖 Assistant <span class="streaming-badge">STREAMING</span>';
-        }
-
-        if (cursorEl) {
-          (cursorEl as HTMLElement).style.display = 'inline'; // Show cursor again
-        }
-
-        // Remove stopped state
-        messageEl.removeAttribute('data-streaming-stopped');
-      }
     } catch (error) {
       console.error('Failed to continue streaming:', error);
     }

@@ -1020,16 +1020,41 @@ class AIClient {
       let fullContent = "";
       let totalTokens = 0;
 
+      console.log(
+        `🛑 AI CLIENT: Starting stream loop for message: ${messageId}`
+      );
+      console.log(
+        `🛑 AI CLIENT: Initial abort signal state: ${abortController?.signal.aborted}`
+      );
+
       try {
         while (true) {
           // Check if stream was aborted
           if (abortController?.signal.aborted) {
             this.logger.info(`⏹️ Stream aborted for message: ${messageId}`);
+            console.log(
+              `🛑 AI CLIENT: Stream aborted in main loop for message: ${messageId}`
+            );
+            break;
+          }
+
+          // Check abort before reading
+          if (abortController?.signal.aborted) {
+            console.log(
+              `🛑 AI CLIENT: Abort detected before read for message: ${messageId}`
+            );
             break;
           }
 
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log(`🛑 AI CLIENT: Stream done for message: ${messageId}`);
+            break;
+          }
+
+          console.log(
+            `🛑 AI CLIENT: Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+          );
 
           const chunk = decoder.decode(value);
           const lines = chunk.split("\n");
@@ -1039,6 +1064,9 @@ class AIClient {
             if (abortController?.signal.aborted) {
               this.logger.info(
                 `⏹️ Stream aborted during chunk processing: ${messageId}`
+              );
+              console.log(
+                `🛑 AI CLIENT: Stream aborted during chunk processing: ${messageId}`
               );
               return null; // Exit early if aborted
             }
@@ -1056,8 +1084,19 @@ class AIClient {
                     fullContent += text;
                     totalTokens += this.estimateTokens(text);
 
+                    // Check abort before sending chunk
+                    if (abortController?.signal.aborted) {
+                      console.log(
+                        `🛑 AI CLIENT: Abort detected before sending chunk for message: ${messageId}`
+                      );
+                      return null;
+                    }
+
                     // Send chunk to UI
                     if (onChunk) {
+                      console.log(
+                        `🛑 AI CLIENT: Sending chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+                      );
                       onChunk({
                         messageId,
                         chunk: text,
@@ -1264,8 +1303,17 @@ class AIClient {
     options,
     messageId,
     onChunk,
-    onComplete
+    onComplete,
+    abortController = null
   ) {
+    console.log(
+      `🛑 AI CLIENT (DeepSeek): Received abortController for ${messageId}:`,
+      !!abortController
+    );
+    console.log(
+      `🛑 AI CLIENT (DeepSeek): AbortController object ID for ${messageId}:`,
+      abortController ? abortController.toString() : "null"
+    );
     const model = options.model || this.providers.deepseek.defaultModel;
     const maxTokens = options.maxTokens || 4000;
 
@@ -1284,6 +1332,7 @@ class AIClient {
             max_tokens: maxTokens,
             stream: true,
           }),
+          signal: abortController?.signal,
         }
       );
 
@@ -1299,15 +1348,73 @@ class AIClient {
       let fullContent = "";
       let totalTokens = 0;
 
+      console.log(
+        `🛑 AI CLIENT (DeepSeek): Starting stream loop for message: ${messageId}`
+      );
+      console.log(
+        `🛑 AI CLIENT (DeepSeek): Initial abort signal state: ${abortController?.signal.aborted}`
+      );
+      console.log(
+        `🛑 AI CLIENT (DeepSeek): AbortController reference for ${messageId}:`,
+        abortController ? "EXISTS" : "NULL"
+      );
+
       try {
         while (true) {
+          // Check if stream was aborted
+          if (abortController?.signal.aborted) {
+            this.logger.info(
+              `⏹️ DeepSeek stream aborted for message: ${messageId}`
+            );
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId}`
+            );
+            break;
+          }
+
+          // Check abort before reading
+          if (abortController?.signal.aborted) {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId}`
+            );
+            break;
+          }
+
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Stream done for message: ${messageId}`
+            );
+            break;
+          }
+
+          console.log(
+            `🛑 AI CLIENT (DeepSeek): Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+          );
+
+          // Extra debugging: Check if abortController reference is still valid
+          if (abortController) {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): AbortController still exists for ${messageId}, signal.aborted: ${abortController.signal.aborted}`
+            );
+          } else {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): AbortController is NULL for ${messageId}!`
+            );
+          }
 
           const chunk = decoder.decode(value);
           const lines = chunk.split("\n");
 
           for (const line of lines) {
+            // Check abort signal before processing each line
+            if (abortController?.signal.aborted) {
+              console.log(
+                `🛑 AI CLIENT (DeepSeek): Stream aborted during chunk processing: ${messageId}`
+              );
+              return null; // Exit early if aborted
+            }
+
             if (line.startsWith("data: ")) {
               const data = line.slice(6);
               if (data === "[DONE]") continue;
@@ -1321,8 +1428,19 @@ class AIClient {
                   fullContent += text;
                   totalTokens += this.estimateTokens(text);
 
+                  // Check abort before sending chunk
+                  if (abortController?.signal.aborted) {
+                    console.log(
+                      `🛑 AI CLIENT (DeepSeek): Abort detected before sending chunk for message: ${messageId}`
+                    );
+                    return null;
+                  }
+
                   // Send chunk to UI
                   if (onChunk) {
+                    console.log(
+                      `🛑 AI CLIENT (DeepSeek): Sending chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+                    );
                     onChunk({
                       messageId,
                       chunk: text,
@@ -1377,7 +1495,7 @@ class AIClient {
       }
     } catch (error) {
       this.logger.error("DeepSeek streaming API call failed:", error);
-      throw error;
+      throw this.enhanceError(error);
     }
   }
 
@@ -1413,10 +1531,45 @@ class AIClient {
       let fullContent = "";
       let totalTokens = 0;
 
+      console.log(
+        `🛑 AI CLIENT (DeepSeek): Starting stream loop for message: ${messageId}`
+      );
+      console.log(
+        `🛑 AI CLIENT (DeepSeek): Initial abort signal state: ${abortController?.signal.aborted}`
+      );
+
       try {
         while (true) {
+          // Check if stream was aborted
+          if (abortController?.signal.aborted) {
+            this.logger.info(
+              `⏹️ DeepSeek stream aborted for message: ${messageId}`
+            );
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId}`
+            );
+            break;
+          }
+
+          // Check abort before reading
+          if (abortController?.signal.aborted) {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId}`
+            );
+            break;
+          }
+
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Stream done for message: ${messageId}`
+            );
+            break;
+          }
+
+          console.log(
+            `🛑 AI CLIENT (DeepSeek): Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+          );
 
           const chunk = decoder.decode(value);
           const lines = chunk.split("\n").filter((line) => line.trim());

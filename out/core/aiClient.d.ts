@@ -266,7 +266,7 @@ declare class AIClient {
     /**
      * 🌊 DeepSeek Streaming API
      */
-    callDeepSeekStreamingAPI(apiKey: any, prompt: any, options: any, messageId: any, onChunk: any, onComplete: any): Promise<{
+    callDeepSeekStreamingAPI(apiKey: any, prompt: any, options: any, messageId: any, onChunk: any, onComplete: any, abortController?: null): Promise<{
         id: any;
         type: string;
         content: string;
@@ -275,7 +275,7 @@ declare class AIClient {
         cost: number;
         provider: string;
         model: any;
-    }>;
+    } | null>;
     /**
      * 🌊 Local LLM Streaming API (Ollama/LM Studio)
      */

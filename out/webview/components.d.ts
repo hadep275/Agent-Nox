@@ -95,6 +95,14 @@ export declare class StreamingMessageComponent {
      */
     static completeStreaming(messageId: string, finalMessage: ChatMessage): void;
     /**
+     * NEW: Stop streaming buffer immediately
+     */
+    static stopStreamingBuffer(messageId: string): void;
+    /**
+     * NEW: Update stop/continue button state with immediate visual feedback
+     */
+    private static updateStopButtonState;
+    /**
      * Stop streaming request
      */
     private static stopStreaming;

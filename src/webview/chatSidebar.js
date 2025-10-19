@@ -384,30 +384,66 @@ class NoxChatViewProvider {
   async handleStreamStop(messageId) {
     try {
       this.logger.info(`⏹️ Stopping stream: ${messageId}`);
+      console.log(
+        `🛑 BACKEND: Received stop request for message: ${messageId}`
+      );
+      console.log(
+        `🛑 BACKEND: Active streams count: ${this.activeStreams.size}`
+      );
+      console.log(
+        `🛑 BACKEND: Active streams keys:`,
+        Array.from(this.activeStreams.keys())
+      );
 
       // Get the abort controller for this stream
       const abortController = this.activeStreams.get(messageId);
 
       if (abortController) {
+        console.log(
+          `🛑 BACKEND: Found AbortController for ${messageId}, calling abort()`
+        );
+
         // Abort the request
         abortController.abort();
+
+        console.log(
+          `🛑 BACKEND: AbortController.signal.aborted = ${abortController.signal.aborted}`
+        );
 
         // Clean up
         this.activeStreams.delete(messageId);
         this.isAIResponding = false;
 
+        // Send immediate confirmation to webview
         this.sendMessageToWebview({
           type: "streamStopped",
           messageId: messageId,
         });
 
         this.logger.info(`⏹️ Stream stopped successfully: ${messageId}`);
+        console.log(
+          `🛑 BACKEND: Stream stopped and cleaned up for ${messageId}`
+        );
       } else {
+        console.error(
+          `🛑 BACKEND: NO ABORT CONTROLLER FOUND for messageId: ${messageId}`
+        );
+        console.log(
+          `🛑 BACKEND: Available messageIds:`,
+          Array.from(this.activeStreams.keys())
+        );
         this.logger.warn(
           `⏹️ No active stream found for messageId: ${messageId}`
         );
+
+        // Still send stopped message to update UI
+        this.sendMessageToWebview({
+          type: "streamStopped",
+          messageId: messageId,
+        });
       }
     } catch (error) {
+      console.error(`🛑 BACKEND: Error stopping stream:`, error);
       this.logger.error("Error stopping stream:", error);
     }
   }
