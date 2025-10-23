@@ -306,6 +306,22 @@ class NoxChatViewProvider {
 
       // Create abort controller for this stream
       const abortController = new AbortController();
+
+      // 🔍 PHASE 1 DIAGNOSTICS: Track AbortController object identity
+      const abortControllerID = `AC_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      abortController._debugID = abortControllerID;
+      console.log(
+        `🔍 BACKEND: Created AbortController for ${streamingMessageId} with ID: ${abortControllerID}`
+      );
+      console.log(
+        `🔍 BACKEND: AbortController object reference: ${abortController.toString()}`
+      );
+      console.log(
+        `🔍 BACKEND: Initial signal.aborted state: ${abortController.signal.aborted}`
+      );
+
       this.activeStreams.set(streamingMessageId, abortController);
 
       // Start streaming UI
@@ -337,8 +353,16 @@ class NoxChatViewProvider {
           finalMessage: finalMessage,
         });
 
-        // Clean up active stream
-        this.activeStreams.delete(streamingMessageId);
+        // 🔧 FIX: Don't immediately clean up AbortController - keep it for potential stop requests
+        // Only clean up after a delay to allow stop button to work even after completion
+        setTimeout(() => {
+          this.activeStreams.delete(streamingMessageId);
+          console.log(
+            `🔧 FIX: Delayed cleanup of AbortController for ${streamingMessageId}`
+          );
+        }, 5000); // 5 second delay
+
+        this.isAIResponding = false;
 
         this.logger.info(
           `🌊 Streaming chat exchange completed (${
@@ -346,6 +370,22 @@ class NoxChatViewProvider {
           } tokens)`
         );
       };
+
+      // 🔍 PHASE 1 DIAGNOSTICS: Pre-call verification
+      console.log(
+        `🔍 BACKEND: About to call sendStreamingRequest for ${streamingMessageId}`
+      );
+      console.log(
+        `🔍 BACKEND: Passing AbortController ID: ${
+          abortController._debugID || "NO_ID"
+        }`
+      );
+      console.log(
+        `🔍 BACKEND: Passing AbortController reference: ${abortController.toString()}`
+      );
+      console.log(
+        `🔍 BACKEND: Signal state before call: ${abortController.signal.aborted}`
+      );
 
       // Get streaming AI response
       await this.agentController.aiClient.sendStreamingRequest(
@@ -403,9 +443,31 @@ class NoxChatViewProvider {
           `🛑 BACKEND: Found AbortController for ${messageId}, calling abort()`
         );
 
+        // 🔍 PHASE 1 DIAGNOSTICS: Enhanced abort tracking
+        console.log(
+          `🔍 BACKEND: AbortController ID: ${
+            abortController._debugID || "NO_ID"
+          }`
+        );
+        console.log(
+          `🔍 BACKEND: AbortController object reference: ${abortController.toString()}`
+        );
+        console.log(
+          `🔍 BACKEND: Signal state BEFORE abort: ${abortController.signal.aborted}`
+        );
+        console.log(
+          `🔍 BACKEND: Timestamp before abort: ${new Date().toISOString()}`
+        );
+
         // Abort the request
         abortController.abort();
 
+        console.log(
+          `🔍 BACKEND: Signal state AFTER abort: ${abortController.signal.aborted}`
+        );
+        console.log(
+          `🔍 BACKEND: Timestamp after abort: ${new Date().toISOString()}`
+        );
         console.log(
           `🛑 BACKEND: AbortController.signal.aborted = ${abortController.signal.aborted}`
         );
@@ -509,8 +571,15 @@ class NoxChatViewProvider {
           finalMessage: finalMessage,
         });
 
-        // Clean up active stream
-        this.activeStreams.delete(messageId);
+        // 🔧 FIX: Don't immediately clean up AbortController - keep it for potential stop requests
+        // Only clean up after a delay to allow stop button to work even after completion
+        setTimeout(() => {
+          this.activeStreams.delete(messageId);
+          console.log(
+            `🔧 FIX: Delayed cleanup of AbortController for continued stream ${messageId}`
+          );
+        }, 5000); // 5 second delay
+
         this.isAIResponding = false;
 
         this.logger.info(`🌊 Continued streaming completed for: ${messageId}`);

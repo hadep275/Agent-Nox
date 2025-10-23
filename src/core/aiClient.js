@@ -282,6 +282,30 @@ class AIClient {
     const provider = this.providers[this.currentProvider];
     const messageId = options.messageId || Date.now().toString();
 
+    // 🔍 PHASE 1 DIAGNOSTICS: Verify AbortController reception
+    console.log(
+      `🔍 AI CLIENT: sendStreamingRequest called for message: ${messageId}`
+    );
+    console.log(`🔍 AI CLIENT: Received abortController: ${!!abortController}`);
+    if (abortController) {
+      console.log(
+        `🔍 AI CLIENT: AbortController ID: ${
+          abortController._debugID || "NO_ID"
+        }`
+      );
+      console.log(
+        `🔍 AI CLIENT: AbortController reference: ${abortController.toString()}`
+      );
+      console.log(
+        `🔍 AI CLIENT: Signal state on entry: ${abortController.signal.aborted}`
+      );
+      console.log(
+        `🔍 AI CLIENT: Timestamp on entry: ${new Date().toISOString()}`
+      );
+    } else {
+      console.log(`🔍 AI CLIENT: AbortController is NULL!`);
+    }
+
     try {
       this.logger.info(`🌊 Starting streaming request to ${provider.name}...`);
 
@@ -298,6 +322,24 @@ class AIClient {
         model: options.model || this.currentModel,
         stream: true, // Enable streaming
       };
+
+      // 🔍 PHASE 1 DIAGNOSTICS: Pre-provider call verification
+      console.log(
+        `🔍 AI CLIENT: About to call ${this.currentProvider} provider for message: ${messageId}`
+      );
+      if (abortController) {
+        console.log(
+          `🔍 AI CLIENT: AbortController ID before provider call: ${
+            abortController._debugID || "NO_ID"
+          }`
+        );
+        console.log(
+          `🔍 AI CLIENT: Signal state before provider call: ${abortController.signal.aborted}`
+        );
+        console.log(
+          `🔍 AI CLIENT: Timestamp before provider call: ${new Date().toISOString()}`
+        );
+      }
 
       // Route to appropriate streaming provider
       let finalMessage;
@@ -1314,6 +1356,24 @@ class AIClient {
       `🛑 AI CLIENT (DeepSeek): AbortController object ID for ${messageId}:`,
       abortController ? abortController.toString() : "null"
     );
+
+    // 🔍 PHASE 1 DIAGNOSTICS: Enhanced DeepSeek entry logging
+    if (abortController) {
+      console.log(
+        `🔍 DEEPSEEK: AbortController ID: ${
+          abortController._debugID || "NO_ID"
+        }`
+      );
+      console.log(
+        `🔍 DEEPSEEK: AbortController reference: ${abortController.toString()}`
+      );
+      console.log(
+        `🔍 DEEPSEEK: Signal state on method entry: ${abortController.signal.aborted}`
+      );
+      console.log(
+        `🔍 DEEPSEEK: Timestamp on method entry: ${new Date().toISOString()}`
+      );
+    }
     const model = options.model || this.providers.deepseek.defaultModel;
     const maxTokens = options.maxTokens || 4000;
 
@@ -1348,6 +1408,17 @@ class AIClient {
       let fullContent = "";
       let totalTokens = 0;
 
+      // 🔧 ROBUST ABORT HANDLING: Set up abort signal listener
+      let isAborted = false;
+      if (abortController) {
+        abortController.signal.addEventListener("abort", () => {
+          isAborted = true;
+          console.log(
+            `🔧 ABORT LISTENER: Signal received for message: ${messageId}`
+          );
+        });
+      }
+
       console.log(
         `🛑 AI CLIENT (DeepSeek): Starting stream loop for message: ${messageId}`
       );
@@ -1359,23 +1430,38 @@ class AIClient {
         abortController ? "EXISTS" : "NULL"
       );
 
+      // 🔍 PHASE 1 DIAGNOSTICS: Enhanced stream loop entry
+      if (abortController) {
+        console.log(
+          `🔍 DEEPSEEK LOOP: Starting with AbortController ID: ${
+            abortController._debugID || "NO_ID"
+          }`
+        );
+        console.log(
+          `🔍 DEEPSEEK LOOP: Signal state at loop start: ${abortController.signal.aborted}`
+        );
+        console.log(
+          `🔍 DEEPSEEK LOOP: Timestamp at loop start: ${new Date().toISOString()}`
+        );
+      }
+
       try {
         while (true) {
-          // Check if stream was aborted
-          if (abortController?.signal.aborted) {
+          // 🔧 ROBUST ABORT CHECK: Use event listener flag
+          if (isAborted || abortController?.signal.aborted) {
             this.logger.info(
               `⏹️ DeepSeek stream aborted for message: ${messageId}`
             );
             console.log(
-              `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId}`
+              `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
             );
             break;
           }
 
-          // Check abort before reading
-          if (abortController?.signal.aborted) {
+          // 🔧 ROBUST ABORT CHECK: Check again before read
+          if (isAborted || abortController?.signal.aborted) {
             console.log(
-              `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId}`
+              `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
             );
             break;
           }
@@ -1392,8 +1478,19 @@ class AIClient {
             `🛑 AI CLIENT (DeepSeek): Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
           );
 
-          // Extra debugging: Check if abortController reference is still valid
+          // 🔍 PHASE 1 DIAGNOSTICS: Enhanced chunk processing monitoring
           if (abortController) {
+            console.log(
+              `🔍 DEEPSEEK CHUNK: AbortController ID: ${
+                abortController._debugID || "NO_ID"
+              }`
+            );
+            console.log(
+              `🔍 DEEPSEEK CHUNK: Signal state during chunk: ${abortController.signal.aborted}`
+            );
+            console.log(
+              `🔍 DEEPSEEK CHUNK: Timestamp during chunk: ${new Date().toISOString()}`
+            );
             console.log(
               `🛑 AI CLIENT (DeepSeek): AbortController still exists for ${messageId}, signal.aborted: ${abortController.signal.aborted}`
             );
@@ -1407,10 +1504,10 @@ class AIClient {
           const lines = chunk.split("\n");
 
           for (const line of lines) {
-            // Check abort signal before processing each line
-            if (abortController?.signal.aborted) {
+            // 🔧 ROBUST ABORT CHECK: Check abort signal before processing each line
+            if (isAborted || abortController?.signal.aborted) {
               console.log(
-                `🛑 AI CLIENT (DeepSeek): Stream aborted during chunk processing: ${messageId}`
+                `🛑 AI CLIENT (DeepSeek): Stream aborted during chunk processing: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
               );
               return null; // Exit early if aborted
             }
@@ -1428,12 +1525,27 @@ class AIClient {
                   fullContent += text;
                   totalTokens += this.estimateTokens(text);
 
-                  // Check abort before sending chunk
-                  if (abortController?.signal.aborted) {
+                  // 🔧 ROBUST ABORT CHECK: Check abort before sending chunk
+                  if (isAborted || abortController?.signal.aborted) {
                     console.log(
-                      `🛑 AI CLIENT (DeepSeek): Abort detected before sending chunk for message: ${messageId}`
+                      `🛑 AI CLIENT (DeepSeek): Abort detected before sending chunk for message: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
                     );
                     return null;
+                  }
+
+                  // 🔍 PHASE 1 DIAGNOSTICS: Pre-chunk send verification
+                  if (abortController) {
+                    console.log(
+                      `🔍 DEEPSEEK SEND: About to send chunk, AbortController ID: ${
+                        abortController._debugID || "NO_ID"
+                      }`
+                    );
+                    console.log(
+                      `🔍 DEEPSEEK SEND: Signal state before send: ${abortController.signal.aborted}`
+                    );
+                    console.log(
+                      `🔍 DEEPSEEK SEND: Timestamp before send: ${new Date().toISOString()}`
+                    );
                   }
 
                   // Send chunk to UI
