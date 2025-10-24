@@ -4,10 +4,11 @@ export = NoxChatViewProvider;
  * Aurora-themed chat interface embedded in VS Code sidebar (like Augment chat)
  */
 declare class NoxChatViewProvider {
-    constructor(context: any, agentController: any, logger: any);
+    constructor(context: any, agentController: any, logger: any, themeService: any);
     context: any;
     agentController: any;
     logger: any;
+    themeService: any;
     voiceRecordingService: VoiceRecordingService;
     webviewView: any;
     disposables: any[];
@@ -90,6 +91,10 @@ declare class NoxChatViewProvider {
      * 🚀 Handle webview ready event
      */
     handleWebviewReady(): Promise<void>;
+    /**
+     * 🎨 Apply current theme to chat sidebar
+     */
+    applyCurrentTheme(): Promise<void>;
     /**
      * 🔧 Setup view-specific events
      */

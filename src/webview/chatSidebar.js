@@ -6,10 +6,11 @@ const VoiceRecordingService = require("../core/voiceRecordingService");
  * Aurora-themed chat interface embedded in VS Code sidebar (like Augment chat)
  */
 class NoxChatViewProvider {
-  constructor(context, agentController, logger) {
+  constructor(context, agentController, logger, themeService) {
     this.context = context;
     this.agentController = agentController;
     this.logger = logger;
+    this.themeService = themeService;
 
     // Initialize voice recording service
     this.voiceRecordingService = new VoiceRecordingService(logger, context);
@@ -157,6 +158,29 @@ class NoxChatViewProvider {
             case "getVoiceStatus":
               // Send current voice status to webview
               await this.sendVoiceStatus();
+              break;
+
+            case "injectCSS":
+              // Handle CSS injection for Aurora theme animations
+              this.logger.info(
+                `🎨 Injecting CSS for theme: ${message.theme?.name}`
+              );
+              this.sendMessageToWebview({
+                type: "injectCSS",
+                script: message.script,
+                theme: message.theme,
+              });
+              break;
+
+            case "themeChanged":
+              // Handle theme change notifications
+              this.logger.info(
+                `🎨 Theme changed notification: ${message.theme?.name}`
+              );
+              this.sendMessageToWebview({
+                type: "themeChanged",
+                theme: message.theme,
+              });
               break;
 
             default:
@@ -950,6 +974,105 @@ class NoxChatViewProvider {
 
     // Load chat history
     await this.loadChatHistory();
+
+    // Apply current theme to chat sidebar
+    await this.applyCurrentTheme();
+  }
+
+  /**
+   * 🎨 Apply current theme to chat sidebar
+   */
+  async applyCurrentTheme() {
+    try {
+      console.log("🎨 [DEBUG] applyCurrentTheme called");
+      console.log("🎨 [DEBUG] themeService available:", !!this.themeService);
+
+      if (!this.themeService) {
+        console.warn("🎨 Theme service not available for chat sidebar");
+        this.logger.warn("🎨 Theme service not available for chat sidebar");
+        return;
+      }
+
+      // Get current theme
+      const currentTheme = this.themeService.getCurrentTheme();
+      console.log(
+        "🎨 [DEBUG] Current theme from service:",
+        currentTheme?.name || "null"
+      );
+
+      if (!currentTheme) {
+        console.warn("🎨 No current theme found, using default");
+        this.logger.info("🎨 No current theme found, using default");
+        return;
+      }
+
+      this.logger.info(
+        `🎨 Applying theme to chat sidebar: ${currentTheme.name}`
+      );
+
+      // Generate CSS variables for the theme
+      const cssVariables = this.themeService.generateCSSVariables(currentTheme);
+
+      // Create CSS injection script for chat sidebar
+      // This script applies theme variables with multiple layers of protection
+      const cssInjectionScript = `
+        (function() {
+          const root = document.documentElement;
+          const variables = ${JSON.stringify(cssVariables)};
+
+          // Apply all CSS variables with !important to override bundled defaults
+          Object.entries(variables).forEach(([property, value]) => {
+            root.style.setProperty(property, value, 'important');
+          });
+
+          // Log theme application for debugging
+          console.log('🎨 Chat sidebar theme applied:', '${currentTheme.name}');
+          console.log('🎨 Variables:', variables);
+
+          // Trigger Aurora animation refresh
+          const auroraElements = document.querySelectorAll('.aurora-bg, .progress-fill');
+          auroraElements.forEach(el => {
+            el.style.animation = 'none';
+            el.offsetHeight; // Trigger reflow
+            el.style.animation = null;
+          });
+        })();
+      `;
+
+      // Send CSS injection to chat sidebar webview
+      this.sendMessageToWebview({
+        type: "injectCSS",
+        script: cssInjectionScript,
+        theme: {
+          id: currentTheme.id,
+          name: currentTheme.name,
+          variables: cssVariables,
+        },
+      });
+
+      this.logger.info(
+        `🎨 Theme CSS variables sent to chat sidebar: ${currentTheme.name}`
+      );
+
+      // CRITICAL FIX: Apply theme again after a short delay to ensure bundled JS has loaded
+      // This ensures the theme persists even if bundled CSS tries to override it
+      setTimeout(() => {
+        this.sendMessageToWebview({
+          type: "injectCSS",
+          script: cssInjectionScript,
+          theme: {
+            id: currentTheme.id,
+            name: currentTheme.name,
+            variables: cssVariables,
+          },
+        });
+        this.logger.info(
+          `🎨 Theme CSS variables re-applied after bundled JS load: ${currentTheme.name}`
+        );
+      }, 500);
+    } catch (error) {
+      this.logger.error("🎨 Failed to apply theme to chat sidebar:", error);
+    }
   }
 
   /**
@@ -960,6 +1083,10 @@ class NoxChatViewProvider {
     this.webviewView.onDidChangeVisibility(() => {
       if (this.webviewView.visible) {
         this.logger.info("🦊 Nox chat sidebar became visible");
+
+        // CRITICAL FIX: Re-apply theme when view becomes visible
+        // This ensures theme persists even if it was overridden while hidden
+        this.applyCurrentTheme();
       }
     });
 
@@ -1004,6 +1131,87 @@ class NoxChatViewProvider {
       )
     );
 
+    // 🎨 Get current theme CSS variables for initial load
+    let themeCSS = "";
+    let themeInitScript = "";
+    try {
+      if (this.themeService) {
+        const currentTheme = this.themeService.getCurrentTheme();
+        if (currentTheme) {
+          const cssVariables =
+            this.themeService.generateCSSVariables(currentTheme);
+
+          // Create inline style tag with !important to override bundled defaults
+          themeCSS = `
+        <style nonce="${nonce}">
+          :root {
+            ${Object.entries(cssVariables)
+              .map(([key, value]) => `${key}: ${value} !important;`)
+              .join("\n            ")}
+          }
+        </style>
+          `;
+
+          // Also create a script that applies theme immediately after DOM loads
+          // This ensures theme is applied even if bundled CSS tries to override
+          // CRITICAL FIX: Apply theme multiple times to ensure it persists
+          themeInitScript = `
+        <script nonce="${nonce}">
+          (function() {
+            const themeVariables = ${JSON.stringify(cssVariables)};
+            const root = document.documentElement;
+
+            // Function to apply theme variables
+            function applyTheme() {
+              Object.entries(themeVariables).forEach(([property, value]) => {
+                root.style.setProperty(property, value, 'important');
+              });
+            }
+
+            // Apply theme immediately
+            applyTheme();
+            console.log('🎨 [INIT] Theme applied on page load: ${
+              currentTheme.name
+            }');
+
+            // Re-apply theme after DOM is fully ready
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', () => {
+                applyTheme();
+                console.log('🎨 [INIT] Theme re-applied after DOMContentLoaded: ${
+                  currentTheme.name
+                }');
+              });
+            }
+
+            // Re-apply theme after a short delay to ensure bundled CSS has loaded
+            setTimeout(() => {
+              applyTheme();
+              console.log('🎨 [INIT] Theme re-applied after bundled JS load: ${
+                currentTheme.name
+              }');
+            }, 100);
+
+            // Re-apply theme after window load
+            window.addEventListener('load', () => {
+              applyTheme();
+              console.log('🎨 [INIT] Theme re-applied after window load: ${
+                currentTheme.name
+              }');
+            });
+          })();
+        </script>
+          `;
+
+          this.logger.info(
+            `🎨 Embedded theme CSS for initial load: ${currentTheme.name}`
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.warn("🎨 Failed to embed theme CSS in initial HTML:", error);
+    }
+
     return `<!DOCTYPE html>
     <html lang="en">
     <head>
@@ -1012,7 +1220,7 @@ class NoxChatViewProvider {
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' ${this.webviewView.webview.cspSource} 'unsafe-eval'; font-src https:; media-src * data: blob:;">
         <meta http-equiv="Permissions-Policy" content="microphone=*, camera=*, geolocation=*">
         <title>🦊 Nox Chat</title>
-        <!-- Styles are now bundled with webpack -->
+        <!-- Bundled styles will be injected here by webpack style-loader -->
     </head>
     <body>
         <div class="aurora-bg"></div>
@@ -1124,6 +1332,12 @@ class NoxChatViewProvider {
         <!-- Load bundled JavaScript -->
         <script nonce="${nonce}" src="${vendorsUri}"></script>
         <script nonce="${nonce}" src="${webviewUri}"></script>
+
+        <!-- Apply theme CSS AFTER bundled styles are injected (ensures theme overrides defaults) -->
+        ${themeCSS}
+
+        <!-- Apply theme variables via JavaScript (double-layer protection) -->
+        ${themeInitScript}
     </body>
     </html>`;
   }

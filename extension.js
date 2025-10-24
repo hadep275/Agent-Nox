@@ -4,6 +4,7 @@ const vscode = require("vscode");
 const Logger = require("./src/utils/logger");
 const PerformanceMonitor = require("./src/core/performanceMonitor");
 const AgentController = require("./src/core/agentController");
+const EnterpriseThemeService = require("./src/core/enterpriseThemeService");
 
 const ExplainCommand = require("./src/commands/explainCommand");
 const RefactorCommand = require("./src/commands/refactorCommand");
@@ -24,6 +25,7 @@ class NoxExtension {
     this.agentController = null;
     this.auditLogger = null;
     this.chatSidebarProvider = null;
+    this.themeService = null;
     this.isActivated = false;
   }
 
@@ -109,7 +111,12 @@ class NoxExtension {
       console.log("🦊 Core Step 5: Initializing agent controller...");
       await this.agentController.initialize();
 
-      console.log("🦊 Core Step 6: Core services initialized!");
+      console.log("🦊 Core Step 6: Creating theme service...");
+      // Initialize enterprise theme service
+      this.themeService = new EnterpriseThemeService(this.context);
+      await this.themeService.initialize();
+
+      console.log("🦊 Core Step 7: Core services initialized!");
       this.logger.info("Core services initialized successfully");
     } catch (error) {
       console.error("🦊 Core initialization failed:", error);
@@ -232,6 +239,26 @@ class NoxExtension {
         vscode.commands.registerCommand("nox.resetExtension", async () => {
           await this.resetExtension();
         }),
+
+        // Theme commands
+        vscode.commands.registerCommand("nox.applyTheme", async (themeId) => {
+          await this.applyTheme(themeId);
+        }),
+
+        vscode.commands.registerCommand("nox.showThemeSettings", async () => {
+          await this.showThemeSettings();
+        }),
+
+        vscode.commands.registerCommand(
+          "nox.updateTheme",
+          async (themeMessage) => {
+            await this.updateWebviewTheme(themeMessage);
+          }
+        ),
+
+        vscode.commands.registerCommand("nox.resetTheme", async () => {
+          await this.resetTheme();
+        }),
       ];
 
       // Register all commands with context
@@ -255,7 +282,8 @@ class NoxExtension {
       this.chatSidebarProvider = new NoxChatViewProvider(
         this.context,
         this.agentController,
-        this.logger
+        this.logger,
+        this.themeService
       );
 
       // Register the webview view provider
@@ -386,6 +414,31 @@ class NoxExtension {
               // Close settings panel and open dashboard
               panel.dispose();
               await this.showDashboard();
+              break;
+            case "applyTheme":
+              await this.applyTheme(message.themeId);
+              // Send confirmation back to settings panel
+              panel.webview.postMessage({
+                type: "themeApplied",
+                themeId: message.themeId,
+              });
+              break;
+            case "resetTheme":
+              await this.resetTheme();
+              // Send confirmation back to settings panel
+              panel.webview.postMessage({
+                type: "themeApplied",
+                themeId: "classic",
+              });
+              break;
+            case "getCurrentTheme":
+              if (this.themeService) {
+                const currentTheme = this.themeService.getCurrentTheme();
+                panel.webview.postMessage({
+                  type: "currentTheme",
+                  themeId: currentTheme?.id || "classic",
+                });
+              }
               break;
             default:
               this.logger.warn(
@@ -925,19 +978,70 @@ class NoxExtension {
                 </div>
 
                 <div id="theme" class="section">
-                    <h2>🎨 Aurora Theme</h2>
-                    <p>Customize your Nox experience with beautiful Aurora themes.</p>
+                    <h2>🎨 Aurora Themes</h2>
+                    <p>Choose your perfect Aurora theme for an immersive coding experience.</p>
+
+                    <div class="current-theme-display" style="margin-bottom: 20px; padding: 16px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                        <h3 style="margin: 0 0 8px 0; color: #64b5f6;">Current Theme: <span id="currentThemeName">🌌 Classic Aurora</span></h3>
+                        <div class="theme-preview-bar" id="currentThemePreview" style="height: 4px; border-radius: 2px; background: linear-gradient(135deg, #4c9aff, #8b5cf6, #10b981);"></div>
+                    </div>
+
                     <div class="provider-grid">
-                        <div class="provider-card">
+                        <!-- Dark Themes -->
+                        <div class="provider-card theme-card" data-theme="classic">
+                            <div class="theme-preview" style="height: 40px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(135deg, #4c9aff, #8b5cf6, #10b981);"></div>
                             <h3>🌌 Classic Aurora</h3>
                             <p>Default blue-purple aurora theme</p>
-                            <button class="btn">Apply Theme</button>
+                            <span class="theme-category" style="font-size: 12px; color: #a0a9c0;">🌙 Dark Mode</span>
+                            <button class="btn theme-btn" data-theme="classic">Apply Theme</button>
                         </div>
-                        <div class="provider-card">
+
+                        <div class="provider-card theme-card" data-theme="fire">
+                            <div class="theme-preview" style="height: 40px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(135deg, #ff6b35, #ef4444, #f59e0b);"></div>
                             <h3>🔥 Fire Aurora</h3>
                             <p>Warm orange-red aurora theme</p>
-                            <button class="btn">Apply Theme</button>
+                            <span class="theme-category" style="font-size: 12px; color: #a0a9c0;">🌙 Dark Mode</span>
+                            <button class="btn theme-btn" data-theme="fire">Apply Theme</button>
                         </div>
+
+                        <div class="provider-card theme-card" data-theme="forest">
+                            <div class="theme-preview" style="height: 40px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(135deg, #10b981, #06b6d4, #059669);"></div>
+                            <h3>🌿 Forest Aurora</h3>
+                            <p>Green-teal aurora theme</p>
+                            <span class="theme-category" style="font-size: 12px; color: #a0a9c0;">🌙 Dark Mode</span>
+                            <button class="btn theme-btn" data-theme="forest">Apply Theme</button>
+                        </div>
+
+                        <div class="provider-card theme-card" data-theme="sakura">
+                            <div class="theme-preview" style="height: 40px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(135deg, #f472b6, #a855f7, #fb7185);"></div>
+                            <h3>🌸 Sakura Aurora</h3>
+                            <p>Pink-purple cherry blossom theme</p>
+                            <span class="theme-category" style="font-size: 12px; color: #a0a9c0;">🌙 Dark Mode</span>
+                            <button class="btn theme-btn" data-theme="sakura">Apply Theme</button>
+                        </div>
+
+                        <div class="provider-card theme-card" data-theme="midnight">
+                            <div class="theme-preview" style="height: 40px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(135deg, #6366f1, #8b5cf6, #3b82f6);"></div>
+                            <h3>🌙 Midnight Aurora</h3>
+                            <p>Deep focus, minimal distraction</p>
+                            <span class="theme-category" style="font-size: 12px; color: #a0a9c0;">🌙 Dark Mode</span>
+                            <button class="btn theme-btn" data-theme="midnight">Apply Theme</button>
+                        </div>
+
+                        <!-- Light Theme -->
+                        <div class="provider-card theme-card" data-theme="solar">
+                            <div class="theme-preview" style="height: 40px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(135deg, #f59e0b, #d97706, #ea580c);"></div>
+                            <h3>☀️ Solar Aurora</h3>
+                            <p>Bright, energetic daytime coding</p>
+                            <span class="theme-category" style="font-size: 12px; color: #f59e0b;">☀️ Light Mode</span>
+                            <button class="btn theme-btn" data-theme="solar">Apply Theme</button>
+                        </div>
+                    </div>
+
+                    <div class="theme-options" style="margin-top: 20px; padding: 16px; background: rgba(255, 255, 255, 0.02); border-radius: 8px;">
+                        <button class="btn reset-theme-btn" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444;">
+                            🔄 Reset to Default Theme
+                        </button>
                     </div>
                 </div>
 
@@ -1588,6 +1692,126 @@ class NoxExtension {
             document.getElementById('openDashboardBtn')?.addEventListener('click', () => {
                 vscode.postMessage({ type: 'openDashboard' });
             });
+
+            // Theme functions
+            function applyThemeFromSettings(themeId) {
+                console.log('🎨 Applying theme:', themeId);
+                console.log('🎨 Sending message to extension...');
+                vscode.postMessage({
+                    type: 'applyTheme',
+                    themeId: themeId
+                });
+
+                // Update UI immediately for better UX
+                updateThemeButtons(themeId);
+                console.log('🎨 UI updated for theme:', themeId);
+            }
+
+            function resetThemeFromSettings() {
+                console.log('🎨 Resetting theme to default');
+                vscode.postMessage({ type: 'resetTheme' });
+
+                // Update UI to show classic theme
+                updateThemeButtons('classic');
+            }
+
+            // Setup theme button event listeners
+            function setupThemeEventListeners() {
+                // Theme apply buttons
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const themeId = e.target.getAttribute('data-theme');
+                        if (themeId) {
+                            applyThemeFromSettings(themeId);
+                        }
+                    });
+                });
+
+                // Reset theme button
+                const resetBtn = document.querySelector('.reset-theme-btn');
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', () => {
+                        resetThemeFromSettings();
+                    });
+                }
+            }
+
+            function updateThemeButtons(activeThemeId) {
+                // Update all theme buttons
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    const themeId = btn.getAttribute('data-theme');
+                    if (themeId === activeThemeId) {
+                        btn.textContent = 'Current Theme';
+                        btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                        btn.style.color = 'white';
+                        btn.disabled = true;
+                    } else {
+                        btn.textContent = 'Apply Theme';
+                        btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                        btn.style.color = 'white';
+                        btn.disabled = false;
+                    }
+                });
+
+                // Update current theme display
+                const themeNames = {
+                    'classic': '🌌 Classic Aurora',
+                    'fire': '🔥 Fire Aurora',
+                    'forest': '🌿 Forest Aurora',
+                    'sakura': '🌸 Sakura Aurora',
+                    'midnight': '🌙 Midnight Aurora',
+                    'solar': '☀️ Solar Aurora'
+                };
+
+                const themeGradients = {
+                    'classic': 'linear-gradient(135deg, #4c9aff, #8b5cf6, #10b981)',
+                    'fire': 'linear-gradient(135deg, #ff6b35, #ef4444, #f59e0b)',
+                    'forest': 'linear-gradient(135deg, #10b981, #06b6d4, #059669)',
+                    'sakura': 'linear-gradient(135deg, #f472b6, #a855f7, #fb7185)',
+                    'midnight': 'linear-gradient(135deg, #6366f1, #8b5cf6, #3b82f6)',
+                    'solar': 'linear-gradient(135deg, #f59e0b, #d97706, #ea580c)'
+                };
+
+                const currentThemeNameEl = document.getElementById('currentThemeName');
+                const currentThemePreviewEl = document.getElementById('currentThemePreview');
+
+                if (currentThemeNameEl && themeNames[activeThemeId]) {
+                    currentThemeNameEl.textContent = themeNames[activeThemeId];
+                }
+
+                if (currentThemePreviewEl && themeGradients[activeThemeId]) {
+                    currentThemePreviewEl.style.background = themeGradients[activeThemeId];
+                }
+            }
+
+            // Initialize theme UI when page loads
+            window.addEventListener('load', () => {
+                // Setup event listeners for theme buttons
+                setupThemeEventListeners();
+
+                // Request current theme from extension
+                vscode.postMessage({ type: 'getCurrentTheme' });
+            });
+
+            // Handle theme messages from extension
+            window.addEventListener('message', event => {
+                const message = event.data;
+
+                if (message.type === 'currentTheme') {
+                    updateThemeButtons(message.themeId);
+                } else if (message.type === 'themeApplied') {
+                    updateThemeButtons(message.themeId);
+                    // Show success message could be added here
+                } else if (message.type === 'injectCSS') {
+                    // Execute CSS injection script for Aurora animations
+                    try {
+                        eval(message.script);
+                        console.log('🎨 CSS injection successful for theme:', message.theme.name);
+                    } catch (error) {
+                        console.error('🎨 CSS injection failed:', error);
+                    }
+                }
+            });
         </script>
     </body>
     </html>`;
@@ -1922,40 +2146,120 @@ class NoxExtension {
   }
 
   /**
-   * 🎨 Show theme settings
+   * 🎨 Show theme settings (Enterprise)
    */
   async showThemeSettings() {
-    const themeOptions = [
-      {
-        label: "🌌 Aurora Classic",
-        description: "Default blue-purple aurora theme",
-        theme: "classic",
-      },
-      {
-        label: "🔥 Fire Aurora",
-        description: "Warm orange-red aurora theme",
-        theme: "fire",
-      },
-      {
-        label: "🌿 Forest Aurora",
-        description: "Green-teal aurora theme",
-        theme: "forest",
-      },
-      {
-        label: "🌸 Sakura Aurora",
-        description: "Pink-purple cherry blossom theme",
-        theme: "sakura",
-      },
-    ];
+    try {
+      if (!this.themeService) {
+        vscode.window.showErrorMessage("🎨 Theme service not available");
+        return;
+      }
 
-    const selectedTheme = await vscode.window.showQuickPick(themeOptions, {
-      placeHolder: "🎨 Choose your Aurora theme",
-    });
+      const availableThemes = this.themeService.getAvailableThemes();
+      const currentTheme = this.themeService.getCurrentTheme();
 
-    if (selectedTheme) {
-      // TODO: Implement theme switching
-      vscode.window.showInformationMessage(
-        `🎨 Theme switching coming soon! Selected: ${selectedTheme.label}`
+      const themeOptions = availableThemes.map((theme) => ({
+        label: theme.name,
+        description: theme.description,
+        detail: theme.category === "light" ? "☀️ Light Mode" : "🌙 Dark Mode",
+        theme: theme.id,
+        picked: currentTheme?.id === theme.id,
+      }));
+
+      const selectedTheme = await vscode.window.showQuickPick(themeOptions, {
+        placeHolder: "🎨 Choose your Aurora theme",
+        matchOnDescription: true,
+        matchOnDetail: true,
+      });
+
+      if (selectedTheme) {
+        await this.applyTheme(selectedTheme.theme);
+      }
+    } catch (error) {
+      this.logger.error("Failed to show theme settings:", error);
+      vscode.window.showErrorMessage(
+        `🎨 Failed to show theme settings: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * 🎨 Apply theme (Enterprise)
+   */
+  async applyTheme(themeId) {
+    try {
+      if (!this.themeService) {
+        throw new Error("Theme service not available");
+      }
+
+      const result = await this.themeService.applyTheme(themeId);
+
+      if (result.success) {
+        vscode.window.showInformationMessage(
+          `🎨 Applied theme: ${result.theme.name}`
+        );
+        this.logger.info(
+          `Theme applied: ${result.theme.name} (${result.applyTime}ms)`
+        );
+
+        // CRITICAL FIX: Immediately apply theme to chat sidebar webview
+        // This ensures the webview is updated with the new theme right away
+        if (this.chatSidebarProvider) {
+          await this.chatSidebarProvider.applyCurrentTheme();
+        }
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to apply theme ${themeId}:`, error);
+      vscode.window.showErrorMessage(
+        `🎨 Failed to apply theme: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * 🔄 Update webview theme
+   */
+  async updateWebviewTheme(themeMessage) {
+    try {
+      // Update chat sidebar
+      if (this.chatSidebarProvider && this.chatSidebarProvider.webviewView) {
+        this.chatSidebarProvider.webviewView.webview.postMessage(themeMessage);
+      }
+
+      // Update any other webviews that need theme updates
+      this.logger.info(
+        `Theme update sent to webviews: ${themeMessage.theme.name}`
+      );
+    } catch (error) {
+      this.logger.error("Failed to update webview theme:", error);
+    }
+  }
+
+  /**
+   * 🔄 Reset theme to default
+   */
+  async resetTheme() {
+    try {
+      if (!this.themeService) {
+        throw new Error("Theme service not available");
+      }
+
+      const success = await this.themeService.resetToDefault();
+
+      if (success) {
+        vscode.window.showInformationMessage(
+          "🎨 Theme reset to default (Classic Aurora)"
+        );
+        this.logger.info("Theme reset to default");
+      } else {
+        throw new Error("Failed to reset theme");
+      }
+    } catch (error) {
+      this.logger.error("Failed to reset theme:", error);
+      vscode.window.showErrorMessage(
+        `🎨 Failed to reset theme: ${error.message}`
       );
     }
   }

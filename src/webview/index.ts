@@ -252,6 +252,56 @@ class NoxChatApp {
     this.vscode.postMessage(message);
   }
 
+  /**
+   * 🎨 Handle CSS injection for Aurora theme animations
+   */
+  private handleCSSInjection(message: any): void {
+    try {
+      console.log('🎨 Applying Aurora theme CSS variables:', message.theme?.name);
+
+      // Execute the CSS injection script with !important flags
+      eval(message.script);
+
+      console.log('🎨 Aurora theme CSS injection successful');
+      console.log('🎨 Applied theme:', message.theme?.name);
+    } catch (error) {
+      console.error('🎨 Aurora theme CSS injection failed:', error);
+    }
+  }
+
+  /**
+   * 🎨 Handle theme change notifications
+   */
+  private handleThemeChanged(message: any): void {
+    try {
+      console.log('🎨 Theme changed:', message.theme?.name);
+
+      if (message.theme?.cssVariables) {
+        // Apply CSS variables from theme change
+        const root = document.documentElement;
+        const variables = message.theme.cssVariables;
+
+        // CRITICAL FIX: Apply CSS variables with 'important' flag to override bundled CSS defaults
+        Object.entries(variables).forEach(([property, value]) => {
+          root.style.setProperty(property, value as string, 'important');
+        });
+
+        // Trigger Aurora animation refresh
+        const auroraElements = document.querySelectorAll('.aurora-bg, .progress-fill');
+        auroraElements.forEach(el => {
+          const element = el as HTMLElement;
+          element.style.animation = 'none';
+          element.offsetHeight; // Trigger reflow
+          element.style.animation = '';
+        });
+
+        console.log('🎨 Theme change applied successfully:', message.theme.name);
+      }
+    } catch (error) {
+      console.error('🎨 Theme change failed:', error);
+    }
+  }
+
   private sendUserMessage(): void {
     const message = this.elements.messageInput?.value.trim();
 
@@ -372,6 +422,16 @@ class NoxChatApp {
 
       case 'streamStopped':
         this.handleStreamStopped(message.messageId, message.partialContent);
+        break;
+
+      case 'injectCSS':
+        // Handle CSS injection for Aurora theme animations
+        this.handleCSSInjection(message);
+        break;
+
+      case 'themeChanged':
+        // Handle theme change notifications
+        this.handleThemeChanged(message);
         break;
 
       default:

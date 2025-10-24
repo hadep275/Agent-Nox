@@ -4,13 +4,15 @@
  */
 
 /* Aurora Theme Variables */
+/* 🎨 CRITICAL FIX: Removed hardcoded Aurora color fallback values to prevent CSS from overriding theme persistence.
+   Theme-specific values are ONLY set via:
+   1. Embedded CSS in HTML head with !important flags (on initial load)
+   2. JavaScript injection with setProperty(..., 'important') (on theme changes)
+
+   This :root selector now ONLY contains VS Code integration variables and button references.
+   Aurora color variables are set ONLY by JavaScript to ensure theme persistence works correctly. */
 :root {
-  --aurora-blue: #4c9aff;
-  --aurora-purple: #8b5cf6;
-  --aurora-green: #10b981;
-  --aurora-pink: #f472b6;
-  --aurora-cyan: #06b6d4;
-  --aurora-orange: #ff6b35;
+  /* VS Code Integration - These reference VS Code's built-in variables */
   --bg-primary: var(--vscode-sideBar-background);
   --bg-secondary: var(--vscode-sideBarSectionHeader-background);
   --text-primary: var(--vscode-sideBar-foreground);
@@ -18,6 +20,8 @@
   --border-color: var(--vscode-sideBarSectionHeader-border);
   --input-bg: var(--vscode-input-background);
   --input-border: var(--vscode-input-border);
+
+  /* Button Colors - Reference aurora colors which will be set by JavaScript */
   --button-bg: var(--aurora-blue);
   --button-hover: var(--aurora-purple);
 }
@@ -38,7 +42,7 @@ body {
   overflow: hidden;
 }
 
-/* Aurora Background */
+/* Aurora Background (Theme-Aware) */
 .aurora-bg {
   position: fixed;
   top: 0;
@@ -47,11 +51,11 @@ body {
   height: 100%;
   background: linear-gradient(
     45deg,
-    rgba(76, 154, 255, 0.1) 0%,
-    rgba(139, 92, 246, 0.1) 25%,
-    rgba(16, 185, 129, 0.1) 50%,
-    rgba(244, 114, 182, 0.1) 75%,
-    rgba(6, 182, 212, 0.1) 100%
+    var(--aurora-anim-1, rgba(76, 154, 255, 0.1)) 0%,
+    var(--aurora-anim-2, rgba(139, 92, 246, 0.1)) 25%,
+    var(--aurora-anim-3, rgba(16, 185, 129, 0.1)) 50%,
+    var(--aurora-anim-4, rgba(244, 114, 182, 0.1)) 75%,
+    var(--aurora-anim-5, rgba(6, 182, 212, 0.1)) 100%
   );
   background-size: 400% 400%;
   animation: aurora-flow 15s ease-in-out infinite;
@@ -1260,11 +1264,14 @@ body {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    var(--aurora-blue),
-    var(--aurora-purple),
-    var(--aurora-green)
+  background: var(
+    --gradient-aurora,
+    linear-gradient(
+      90deg,
+      var(--aurora-blue, #4c9aff),
+      var(--aurora-purple, #8b5cf6),
+      var(--aurora-green, #10b981)
+    )
   );
   width: 0%;
   transition: width 0.3s ease;
