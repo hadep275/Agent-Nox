@@ -238,11 +238,11 @@ class NoxChatViewProvider {
         thinking: true,
       });
 
-      // Get AI response using existing AIClient
-      const aiResponse = await this.agentController.aiClient.sendRequest(
-        userMessage,
-        { maxTokens: 4000 }
-      );
+      // Get AI response using NOX consciousness system
+      const aiResponse = await this.agentController.executeTask("chat", {
+        message: userMessage,
+        maxTokens: 4000,
+      });
 
       // Hide thinking indicator
       this.sendMessageToWebview({
@@ -411,9 +411,25 @@ class NoxChatViewProvider {
         `🔍 BACKEND: Signal state before call: ${abortController.signal.aborted}`
       );
 
-      // Get streaming AI response
-      await this.agentController.aiClient.sendStreamingRequest(
-        userMessage,
+      // Get streaming AI response using NOX consciousness system
+      // Build NOX context and prompts
+      const noxContext = await this.agentController.buildNoxContext("chat", {
+        message: userMessage,
+      });
+      const systemPrompt = this.agentController.buildNoxSystemPrompt(
+        "chat",
+        noxContext
+      );
+      const taskPrompt = this.agentController.buildNoxTaskPrompt(
+        "chat",
+        { message: userMessage },
+        noxContext
+      );
+
+      // Execute with NOX consciousness
+      await this.agentController.executeNoxStreamingTask(
+        systemPrompt,
+        taskPrompt,
         {
           maxTokens: 4000,
           messageId: streamingMessageId,
@@ -782,11 +798,11 @@ class NoxChatViewProvider {
         thinking: true,
       });
 
-      // Get new AI response
-      const aiResponse = await this.agentController.aiClient.sendRequest(
-        userMessage.content,
-        { maxTokens: 4000 }
-      );
+      // Get new AI response using NOX consciousness system
+      const aiResponse = await this.agentController.executeTask("chat", {
+        message: userMessage.content,
+        maxTokens: 4000,
+      });
 
       // Hide thinking indicator
       this.sendMessageToWebview({

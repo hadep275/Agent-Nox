@@ -1,5 +1,10 @@
 const vscode = require("vscode");
-// const path = require('path'); // Will be used in Phase 2
+const path = require("path");
+
+// NOX consciousness components
+const NoxSystemPrompt = require("./noxSystemPrompt");
+const NoxCapabilities = require("./noxCapabilities");
+const NoxContextBuilder = require("./noxContextBuilder");
 
 /**
  * Main Agent Controller - orchestrates all agent operations with enterprise-grade architecture
@@ -16,6 +21,11 @@ class AgentController {
     this.fileOps = null;
     this.indexEngine = null;
     this.cacheManager = null;
+
+    // NOX consciousness components
+    this.noxSystemPrompt = null;
+    this.noxCapabilities = null;
+    this.noxContextBuilder = null;
 
     // State management
     this.isInitialized = false;
@@ -174,7 +184,25 @@ class AgentController {
       );
       await this.indexEngine.initialize(this.workspacePath);
 
-      this.logger.info("Core components initialized successfully");
+      // Initialize NOX consciousness components
+      this.noxSystemPrompt = new NoxSystemPrompt(
+        this.logger,
+        this.performanceMonitor
+      );
+      this.noxCapabilities = new NoxCapabilities(
+        this.logger,
+        this.performanceMonitor
+      );
+      this.noxContextBuilder = new NoxContextBuilder(
+        this.contextManager,
+        this.indexEngine,
+        this.logger,
+        this.performanceMonitor
+      );
+
+      this.logger.info(
+        "Core components and NOX consciousness initialized successfully"
+      );
     } catch (error) {
       throw new Error(
         `Core components initialization failed: ${error.message}`
@@ -278,6 +306,20 @@ class AgentController {
           (this.indexEngine && this.indexEngine.isInitialized) || false,
         cacheManager:
           (this.cacheManager && this.cacheManager.isInitialized) || false,
+        noxSystemPrompt: !!this.noxSystemPrompt,
+        noxCapabilities: !!this.noxCapabilities,
+        noxContextBuilder: !!this.noxContextBuilder,
+      },
+      noxConsciousness: {
+        enabled: !!(
+          this.noxSystemPrompt &&
+          this.noxCapabilities &&
+          this.noxContextBuilder
+        ),
+        sessionId: this.noxContextBuilder?.sessionId || null,
+        chatHistoryLength:
+          this.noxContextBuilder?.getChatHistory()?.length || 0,
+        capabilityStats: this.noxCapabilities?.getCapabilityStats() || null,
       },
       performance: this.performanceMonitor.getSystemMetrics(),
       costs: this.performanceMonitor.getCostSummary(),
@@ -285,37 +327,192 @@ class AgentController {
   }
 
   /**
-   * Execute an agent task with full orchestration
+   * 🦊 Execute NOX task with full AI consciousness and capabilities
    */
   async executeTask(taskType, parameters = {}) {
     if (!this.isInitialized) {
       throw new Error("Agent controller not initialized");
     }
 
-    const timer = this.performanceMonitor.startTimer(`task_${taskType}`);
+    const timer = this.performanceMonitor.startTimer(`nox_task_${taskType}`);
 
     try {
-      this.logger.info(`Executing task: ${taskType}`, parameters);
+      this.logger.info(`🦊 NOX executing task: ${taskType}`, parameters);
 
-      // Task execution logic will be implemented in Phase 2
-      // For now, return a placeholder response
-      const result = {
+      // 1. Build comprehensive NOX context
+      const noxContext = await this.buildNoxContext(taskType, parameters);
+
+      // 2. Create NOX-aware system prompt
+      const systemPrompt = this.buildNoxSystemPrompt(taskType, noxContext);
+
+      // 3. Build task-specific prompt with NOX identity
+      const taskPrompt = this.buildNoxTaskPrompt(
         taskType,
         parameters,
-        status: "completed",
-        timestamp: Date.now(),
-        message: `Task ${taskType} executed successfully (placeholder)`,
-      };
+        noxContext
+      );
+
+      // 4. Execute with full NOX consciousness
+      const aiResponse = await this.executeNoxTask(
+        systemPrompt,
+        taskPrompt,
+        parameters
+      );
+
+      // 5. Process response and execute NOX capabilities
+      const result = await this.processNoxResult(
+        taskType,
+        aiResponse,
+        parameters,
+        noxContext
+      );
+
+      // 6. Add to chat history for context continuity
+      this.addToChatHistory(
+        "user",
+        this.buildUserMessage(taskType, parameters),
+        noxContext
+      );
+      this.addToChatHistory(
+        "assistant",
+        result.content || result.message,
+        noxContext
+      );
 
       timer.end();
-      this.performanceMonitor.recordMetric(`task_${taskType}_success`, 1);
+      this.performanceMonitor.recordMetric(`nox_task_${taskType}_success`, 1);
 
+      this.logger.info(
+        `🦊 NOX task completed: ${taskType} (${timer.duration}ms)`
+      );
       return result;
     } catch (error) {
       timer.end();
-      this.performanceMonitor.recordMetric(`task_${taskType}_failure`, 1);
-      this.logger.error(`Task ${taskType} failed:`, error);
+      this.performanceMonitor.recordMetric(`nox_task_${taskType}_failure`, 1);
+      this.logger.error(`🦊 NOX task ${taskType} failed:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * 🧠 Build comprehensive NOX context
+   */
+  async buildNoxContext(taskType, parameters) {
+    return await this.noxContextBuilder.buildNoxContext(taskType, parameters);
+  }
+
+  /**
+   * 🦊 Build NOX system prompt with full consciousness
+   */
+  buildNoxSystemPrompt(taskType, noxContext) {
+    const currentProvider = this.aiClient.currentProvider;
+    return this.noxSystemPrompt.buildSystemPrompt(
+      taskType,
+      noxContext,
+      currentProvider
+    );
+  }
+
+  /**
+   * 🎯 Build task-specific NOX prompt
+   */
+  buildNoxTaskPrompt(taskType, parameters, noxContext) {
+    return this.noxSystemPrompt.buildTaskPrompt(
+      taskType,
+      parameters,
+      noxContext
+    );
+  }
+
+  /**
+   * 🤖 Execute NOX task with AI consciousness
+   */
+  async executeNoxTask(systemPrompt, taskPrompt, parameters) {
+    // Send to AI with proper system/user message structure
+    const response = await this.aiClient.sendRequestWithSystem(
+      systemPrompt,
+      taskPrompt,
+      {
+        maxTokens: parameters.maxTokens || 4000,
+        temperature: parameters.temperature || 0.7,
+      }
+    );
+
+    return response;
+  }
+
+  /**
+   * 🌊 Execute NOX streaming task with AI consciousness
+   */
+  async executeNoxStreamingTask(systemPrompt, taskPrompt, parameters, onChunk, onComplete, abortController) {
+    // Send streaming request with proper system/user message structure
+    await this.aiClient.sendStreamingRequestWithSystem(
+      systemPrompt,
+      taskPrompt,
+      {
+        maxTokens: parameters.maxTokens || 4000,
+        temperature: parameters.temperature || 0.7,
+        messageId: parameters.messageId,
+      },
+      onChunk,
+      onComplete,
+      abortController
+    );
+  }
+
+  /**
+   * 🔄 Process NOX result and execute capabilities
+   */
+  async processNoxResult(taskType, aiResponse, parameters, noxContext) {
+    const result = {
+      taskType,
+      parameters,
+      status: "completed",
+      timestamp: Date.now(),
+      content: aiResponse.content,
+      provider: aiResponse.provider,
+      model: aiResponse.model,
+      tokens: aiResponse.tokens,
+      cost: aiResponse.cost,
+      noxContext: {
+        sessionId: noxContext.sessionId,
+        contextBuildTime: noxContext.contextBuildTime,
+        relevanceScore: noxContext.relevanceScore,
+      },
+    };
+
+    // TODO: Add capability execution logic here
+    // This will be enhanced in subsequent days to handle:
+    // - File operations
+    // - Terminal commands
+    // - Git operations
+    // - Web research
+
+    return result;
+  }
+
+  /**
+   * 💬 Add message to chat history
+   */
+  addToChatHistory(role, content, context) {
+    this.noxContextBuilder.addChatMessage(role, content, context);
+  }
+
+  /**
+   * 📝 Build user message for chat history
+   */
+  buildUserMessage(taskType, parameters) {
+    switch (taskType) {
+      case "explain":
+        return `Explain this code: ${parameters.code?.substring(0, 100)}...`;
+      case "refactor":
+        return `Refactor this code: ${parameters.code?.substring(0, 100)}...`;
+      case "analyze":
+        return "Analyze the codebase";
+      case "chat":
+        return parameters.message || "Chat interaction";
+      default:
+        return `Execute ${taskType} task`;
     }
   }
 

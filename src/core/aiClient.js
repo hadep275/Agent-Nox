@@ -265,6 +265,113 @@ class AIClient {
   }
 
   /**
+   * 🦊 Send streaming request with system prompt - NOX CONSCIOUSNESS
+   */
+  async sendStreamingRequestWithSystem(
+    systemPrompt,
+    userPrompt,
+    options = {},
+    onChunk = null,
+    onComplete = null,
+    abortController = null
+  ) {
+    if (!this.isInitialized) {
+      throw new Error("AI Client not initialized");
+    }
+
+    const timer = this.performanceMonitor.startTimer(
+      "ai_streaming_request_with_system"
+    );
+    const provider = this.providers[this.currentProvider];
+    const messageId = options.messageId || Date.now().toString();
+
+    try {
+      this.logger.info(
+        `🦊 Sending NOX-conscious streaming request to ${provider.name}...`
+      );
+
+      // Get API key
+      const apiKey = await this.getApiKey(this.currentProvider);
+      if (!apiKey) {
+        throw new Error(
+          `No API key configured for ${provider.name}. Please set up your API key first.`
+        );
+      }
+
+      // Route to appropriate provider with system message support
+      const requestOptions = {
+        ...options,
+        model: options.model || this.currentModel,
+      };
+
+      switch (this.currentProvider) {
+        case "anthropic":
+          await this.callAnthropicStreamingAPIWithSystem(
+            apiKey,
+            systemPrompt,
+            userPrompt,
+            requestOptions,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        case "openai":
+          // Real streaming for OpenAI with NOX consciousness
+          await this.callOpenAIStreamingAPIWithSystem(
+            apiKey,
+            systemPrompt,
+            userPrompt,
+            requestOptions,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        case "deepseek":
+          // Real streaming for DeepSeek with NOX consciousness
+          await this.callDeepSeekStreamingAPIWithSystem(
+            apiKey,
+            systemPrompt,
+            userPrompt,
+            requestOptions,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        case "local":
+          // Real streaming for Local LLMs with NOX consciousness
+          await this.callLocalStreamingAPIWithSystem(
+            systemPrompt,
+            userPrompt,
+            requestOptions,
+            onChunk,
+            onComplete,
+            abortController
+          );
+          break;
+        default:
+          throw new Error(`Unsupported provider: ${this.currentProvider}`);
+      }
+
+      timer.end();
+      this.performanceMonitor.recordMetric(
+        "ai_streaming_request_with_system_success",
+        1
+      );
+    } catch (error) {
+      timer.end();
+      this.performanceMonitor.recordMetric(
+        "ai_streaming_request_with_system_error",
+        1
+      );
+      this.logger.error(`NOX-conscious streaming request failed:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * 🌊 Send streaming request to AI provider - REAL-TIME IMPLEMENTATION
    */
   async sendStreamingRequest(
@@ -404,6 +511,90 @@ class AIClient {
   }
 
   /**
+   * 🦊 Send request with system prompt to AI provider - NOX CONSCIOUSNESS
+   */
+  async sendRequestWithSystem(systemPrompt, userPrompt, options = {}) {
+    if (!this.isInitialized) {
+      throw new Error("AI Client not initialized");
+    }
+
+    const timer = this.performanceMonitor.startTimer("ai_request_with_system");
+    const provider = this.providers[this.currentProvider];
+
+    try {
+      this.logger.info(
+        `🦊 Sending NOX-conscious request to ${provider.name}...`
+      );
+
+      // Get API key
+      const apiKey = await this.getApiKey(this.currentProvider);
+      if (!apiKey) {
+        throw new Error(
+          `No API key configured for ${provider.name}. Please set up your API key first.`
+        );
+      }
+
+      // Route to appropriate provider with system message support
+      let response;
+      const requestOptions = {
+        ...options,
+        model: options.model || this.currentModel,
+      };
+
+      switch (this.currentProvider) {
+        case "anthropic":
+          response = await this.callAnthropicAPIWithSystem(
+            apiKey,
+            systemPrompt,
+            userPrompt,
+            requestOptions
+          );
+          break;
+        case "openai":
+          response = await this.callOpenAIAPIWithSystem(
+            apiKey,
+            systemPrompt,
+            userPrompt,
+            requestOptions
+          );
+          break;
+        case "deepseek":
+          response = await this.callDeepSeekAPIWithSystem(
+            apiKey,
+            systemPrompt,
+            userPrompt,
+            requestOptions
+          );
+          break;
+        case "local":
+          response = await this.callLocalAPIWithSystem(
+            systemPrompt,
+            userPrompt,
+            requestOptions
+          );
+          break;
+        default:
+          throw new Error(`Unsupported provider: ${this.currentProvider}`);
+      }
+
+      timer.end();
+      this.performanceMonitor.recordMetric("ai_request_with_system_success", 1);
+
+      this.logger.info(
+        `🦊 NOX-conscious response received from ${provider.name} (${timer.duration}ms)`
+      );
+
+      return response;
+    } catch (error) {
+      timer.end();
+      this.performanceMonitor.recordMetric("ai_request_with_system_error", 1);
+
+      this.logger.error(`AI request with system failed:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * 🤖 Send request to AI provider - REAL IMPLEMENTATION
    */
   async sendRequest(prompt, options = {}) {
@@ -471,6 +662,61 @@ class AIClient {
   }
 
   /**
+   * 🦊 Call Anthropic Claude API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callAnthropicAPIWithSystem(
+    apiKey,
+    systemPrompt,
+    userPrompt,
+    options = {}
+  ) {
+    try {
+      const model = options.model || this.providers.anthropic.defaultModel;
+      const maxTokens = options.maxTokens || 4000;
+
+      const response = await axios.post(
+        "https://api.anthropic.com/v1/messages",
+        {
+          model: model,
+          max_tokens: maxTokens,
+          system: systemPrompt,
+          messages: [
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+          temperature: options.temperature || 0.7,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          timeout: 60000, // 60 second timeout
+        }
+      );
+
+      const data = response.data;
+
+      return {
+        id: Date.now().toString(),
+        type: "assistant",
+        content: data.content[0].text,
+        provider: "anthropic",
+        model: model,
+        tokens: data.usage.input_tokens + data.usage.output_tokens,
+        cost: this.calculateAnthropicCost(data.usage, model),
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error("Anthropic API with system call failed:", error);
+      throw this.enhanceError(error);
+    }
+  }
+
+  /**
    * 🤖 Call Anthropic Claude API
    */
   async callAnthropicAPI(apiKey, prompt, options = {}) {
@@ -525,6 +771,63 @@ class AIClient {
       } else {
         throw new Error(`Anthropic API: ${error.message}`);
       }
+    }
+  }
+
+  /**
+   * 🦊 Call OpenAI GPT API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callOpenAIAPIWithSystem(
+    apiKey,
+    systemPrompt,
+    userPrompt,
+    options = {}
+  ) {
+    try {
+      const model = options.model || this.providers.openai.defaultModel;
+      const maxTokens = options.maxTokens || 4000;
+
+      const response = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          model: model,
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+          max_tokens: maxTokens,
+          temperature: options.temperature || 0.7,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          timeout: 60000, // 60 second timeout
+        }
+      );
+
+      const data = response.data;
+
+      return {
+        id: Date.now().toString(),
+        type: "assistant",
+        content: data.choices[0].message.content,
+        provider: "openai",
+        model: model,
+        tokens: data.usage.total_tokens,
+        cost: this.calculateOpenAICost(data.usage, model),
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error("OpenAI API with system call failed:", error);
+      throw this.enhanceError(error);
     }
   }
 
@@ -587,6 +890,191 @@ class AIClient {
   }
 
   /**
+   * 🦊 Call OpenAI GPT Streaming API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callOpenAIStreamingAPIWithSystem(
+    apiKey,
+    systemPrompt,
+    userPrompt,
+    options,
+    onChunk,
+    onComplete,
+    abortController = null
+  ) {
+    const model = options.model || this.providers.openai.defaultModel;
+    const maxTokens = options.maxTokens || 4000;
+    const messageId = options.messageId || Date.now().toString();
+
+    try {
+      console.log(
+        `🦊 NOX STREAMING: Starting NOX-conscious OpenAI stream for message: ${messageId}`
+      );
+
+      const response = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            max_tokens: maxTokens,
+            stream: true,
+            temperature: options.temperature || 0.7,
+          }),
+          signal: abortController?.signal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `OpenAI API error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      // Stream processing with NOX-conscious logging
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      while (true) {
+        if (abortController?.signal?.aborted) break;
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.choices?.[0]?.delta?.content) {
+                const chunkText = parsed.choices[0].delta.content;
+                fullContent += chunkText;
+                totalTokens += 1; // Approximate token count
+
+                console.log(
+                  `🦊 NOX STREAMING: Processing NOX-conscious OpenAI chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                );
+
+                if (onChunk) {
+                  onChunk({
+                    messageId: messageId,
+                    chunk: chunkText,
+                    tokens: totalTokens,
+                    isComplete: false,
+                  });
+                }
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      // Complete the stream
+      const usage = {
+        prompt_tokens: Math.floor(totalTokens * 0.1), // Estimate 10% for prompt
+        completion_tokens: Math.floor(totalTokens * 0.9), // Estimate 90% for completion
+        total_tokens: totalTokens,
+      };
+
+      const finalMessage = {
+        id: messageId,
+        type: "assistant",
+        content: fullContent,
+        provider: "openai",
+        model: model,
+        tokens: totalTokens,
+        cost: this.calculateOpenAICost(usage, model),
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log(
+        `🦊 NOX STREAMING: NOX-conscious OpenAI stream completed for message: ${messageId}`
+      );
+
+      if (onComplete) {
+        onComplete(finalMessage);
+      }
+
+      return finalMessage;
+    } catch (error) {
+      this.logger.error("OpenAI streaming API with system failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 🦊 Call DeepSeek API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callDeepSeekAPIWithSystem(
+    apiKey,
+    systemPrompt,
+    userPrompt,
+    options = {}
+  ) {
+    try {
+      const model = options.model || this.providers.deepseek.defaultModel;
+      const maxTokens = options.maxTokens || 4000;
+
+      const response = await axios.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          model: model,
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+          max_tokens: maxTokens,
+          temperature: options.temperature || 0.7,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          timeout: 60000, // 60 second timeout
+        }
+      );
+
+      const data = response.data;
+
+      return {
+        id: Date.now().toString(),
+        type: "assistant",
+        content: data.choices[0].message.content,
+        provider: "deepseek",
+        model: model,
+        tokens: data.usage.total_tokens,
+        cost: this.calculateDeepSeekCost(data.usage, model),
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error("DeepSeek API with system call failed:", error);
+      throw this.enhanceError(error);
+    }
+  }
+
+  /**
    * ⚡ Call DeepSeek API
    */
   async callDeepSeekAPI(apiKey, prompt, options = {}) {
@@ -639,6 +1127,181 @@ class AIClient {
       } else {
         throw new Error(`DeepSeek API: ${error.message}`);
       }
+    }
+  }
+
+  /**
+   * 🦊 Call Local LLM API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callLocalAPIWithSystem(systemPrompt, userPrompt, options = {}) {
+    try {
+      const model = options.model || "llama2";
+      const baseUrl = options.baseUrl || this.providers.local.baseUrl;
+
+      // Combine system and user prompts for local models
+      const combinedPrompt = `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`;
+
+      const response = await axios.post(
+        `${baseUrl}/api/generate`,
+        {
+          model: model,
+          prompt: combinedPrompt,
+          stream: false,
+          options: {
+            temperature: options.temperature || 0.7,
+          },
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 120000, // 2 minute timeout for local models
+        }
+      );
+
+      const data = response.data;
+
+      return {
+        id: Date.now().toString(),
+        type: "assistant",
+        content: data.response,
+        provider: "local",
+        model: model,
+        tokens: 0, // Local models don't track tokens
+        cost: 0, // Local models are free
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error("Local LLM API with system call failed:", error);
+      throw this.enhanceError(error);
+    }
+  }
+
+  /**
+   * 🦊 Call DeepSeek Streaming API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callDeepSeekStreamingAPIWithSystem(
+    apiKey,
+    systemPrompt,
+    userPrompt,
+    options,
+    onChunk,
+    onComplete,
+    abortController = null
+  ) {
+    const model = options.model || this.providers.deepseek.defaultModel;
+    const maxTokens = options.maxTokens || 4000;
+    const messageId = options.messageId || Date.now().toString();
+
+    try {
+      console.log(
+        `🦊 NOX STREAMING: Starting NOX-conscious DeepSeek stream for message: ${messageId}`
+      );
+
+      const response = await fetch(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            max_tokens: maxTokens,
+            stream: true,
+            temperature: options.temperature || 0.7,
+          }),
+          signal: abortController?.signal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `DeepSeek API error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      // Stream processing with NOX-conscious logging
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      while (true) {
+        if (abortController?.signal?.aborted) break;
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.choices?.[0]?.delta?.content) {
+                const chunkText = parsed.choices[0].delta.content;
+                fullContent += chunkText;
+                totalTokens += 1; // Approximate token count
+
+                console.log(
+                  `🦊 NOX STREAMING: Processing NOX-conscious DeepSeek chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                );
+
+                if (onChunk) {
+                  onChunk({
+                    messageId: messageId,
+                    chunk: chunkText,
+                    tokens: totalTokens,
+                    isComplete: false,
+                  });
+                }
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      // Complete the stream
+      const usage = {
+        prompt_tokens: Math.floor(totalTokens * 0.1), // Estimate 10% for prompt
+        completion_tokens: Math.floor(totalTokens * 0.9), // Estimate 90% for completion
+        total_tokens: totalTokens,
+      };
+
+      const finalMessage = {
+        id: messageId,
+        type: "assistant",
+        content: fullContent,
+        provider: "deepseek",
+        model: model,
+        tokens: totalTokens,
+        cost: this.calculateDeepSeekCost(usage, model),
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log(
+        `🦊 NOX STREAMING: NOX-conscious DeepSeek stream completed for message: ${messageId}`
+      );
+
+      if (onComplete) {
+        onComplete(finalMessage);
+      }
+
+      return finalMessage;
+    } catch (error) {
+      this.logger.error("DeepSeek streaming API with system failed:", error);
+      throw error;
     }
   }
 
@@ -696,17 +1359,148 @@ class AIClient {
    * 💰 Calculate Anthropic API costs
    */
   calculateAnthropicCost(usage, model) {
-    // Anthropic pricing (as of 2024)
+    // Anthropic pricing (as of 2024-2025)
     const pricing = {
-      "claude-3-sonnet-20240229": { input: 0.003, output: 0.015 }, // per 1K tokens
+      // 🏆 Claude 3.5 Sonnet (Current Production)
+      "claude-3-5-sonnet-20241022": { input: 0.003, output: 0.015 }, // per 1K tokens
+      "claude-3-5-sonnet-20240620": { input: 0.003, output: 0.015 },
+
+      // 🚀 Claude 4.5 Sonnet (Latest)
+      "claude-sonnet-4-5-20250929": { input: 0.003, output: 0.015 }, // Estimated pricing
+
+      // 🏃 Claude 3.5 Haiku (Fast & Cheap)
+      "claude-3-5-haiku-20241022": { input: 0.00025, output: 0.00125 },
+
+      // 📚 Legacy Models
+      "claude-3-sonnet-20240229": { input: 0.003, output: 0.015 },
       "claude-3-haiku-20240307": { input: 0.00025, output: 0.00125 },
     };
 
-    const rates = pricing[model] || pricing["claude-3-sonnet-20240229"];
+    const rates = pricing[model] || pricing["claude-sonnet-4-5-20250929"];
     return (
       (usage.input_tokens * rates.input + usage.output_tokens * rates.output) /
       1000
     );
+  }
+
+  /**
+   * 🦊 Call Local LLM Streaming API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callLocalStreamingAPIWithSystem(
+    systemPrompt,
+    userPrompt,
+    options,
+    onChunk,
+    onComplete,
+    abortController = null
+  ) {
+    const model = options.model || "llama2";
+    const baseUrl = options.baseUrl || this.providers.local.baseUrl;
+    const messageId = options.messageId || Date.now().toString();
+
+    try {
+      console.log(
+        `🦊 NOX STREAMING: Starting NOX-conscious Local LLM stream for message: ${messageId}`
+      );
+
+      // Combine system and user prompts for local models
+      const combinedPrompt = `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`;
+
+      const response = await fetch(`${baseUrl}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          prompt: combinedPrompt,
+          stream: true,
+          options: {
+            temperature: options.temperature || 0.7,
+          },
+        }),
+        signal: abortController?.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Local LLM API error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      // Stream processing with NOX-conscious logging
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      while (true) {
+        if (abortController?.signal?.aborted) break;
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.response) {
+                const chunkText = parsed.response;
+                fullContent += chunkText;
+                totalTokens += 1; // Approximate token count
+
+                console.log(
+                  `🦊 NOX STREAMING: Processing NOX-conscious Local LLM chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                );
+
+                if (onChunk) {
+                  onChunk({
+                    messageId: messageId,
+                    chunk: chunkText,
+                    tokens: totalTokens,
+                    isComplete: false,
+                  });
+                }
+              }
+
+              // Check if done
+              if (parsed.done) {
+                break;
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      // Complete the stream
+      const finalMessage = {
+        id: messageId,
+        type: "assistant",
+        content: fullContent,
+        provider: "local",
+        model: model,
+        tokens: totalTokens,
+        cost: 0, // Local models are free
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log(
+        `🦊 NOX STREAMING: NOX-conscious Local LLM stream completed for message: ${messageId}`
+      );
+
+      if (onComplete) {
+        onComplete(finalMessage);
+      }
+
+      return finalMessage;
+    } catch (error) {
+      this.logger.error("Local LLM streaming API with system failed:", error);
+      throw error;
+    }
   }
 
   /**
@@ -1016,6 +1810,139 @@ class AIClient {
     // Rough estimation: ~4 characters per token for most languages
     // This is a conservative estimate that works well for progress tracking
     return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * 🦊 Anthropic Claude Streaming API with system prompt - NOX CONSCIOUSNESS
+   */
+  async callAnthropicStreamingAPIWithSystem(
+    apiKey,
+    systemPrompt,
+    userPrompt,
+    options,
+    onChunk,
+    onComplete,
+    abortController = null
+  ) {
+    const model = options.model || this.providers.anthropic.defaultModel;
+    const maxTokens = options.maxTokens || 4000;
+    const messageId = options.messageId || Date.now().toString();
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: model,
+          max_tokens: maxTokens,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userPrompt }],
+          stream: true,
+          temperature: options.temperature || 0.7,
+        }),
+        signal: abortController?.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(
+          `Anthropic API error: ${response.status} ${response.statusText} - ${errorData}`
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let totalTokens = 0;
+
+      console.log(
+        `🦊 NOX STREAMING: Starting NOX-conscious stream for message: ${messageId}`
+      );
+      console.log(
+        `🦊 NOX STREAMING: Initial abort signal state: ${abortController?.signal?.aborted}`
+      );
+
+      // Process streaming chunks with NOX consciousness
+      while (true) {
+        if (abortController?.signal?.aborted) {
+          console.log(
+            `🦊 NOX STREAMING: Stream aborted for message: ${messageId}`
+          );
+          break;
+        }
+
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+                const chunkText = parsed.delta.text;
+                fullContent += chunkText;
+                totalTokens += 1; // Approximate token count
+
+                console.log(
+                  `🦊 NOX STREAMING: Processing NOX-conscious chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                );
+
+                if (onChunk) {
+                  onChunk({
+                    messageId: messageId,
+                    chunk: chunkText,
+                    tokens: totalTokens,
+                    isComplete: false,
+                  });
+                }
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      // Complete the stream
+      const usage = {
+        input_tokens: Math.floor(totalTokens * 0.1), // Estimate 10% for prompt
+        output_tokens: Math.floor(totalTokens * 0.9), // Estimate 90% for completion
+      };
+
+      const finalMessage = {
+        id: messageId,
+        type: "assistant",
+        content: fullContent,
+        provider: "anthropic",
+        model: model,
+        tokens: totalTokens,
+        cost: this.calculateAnthropicCost(usage, model),
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log(
+        `🦊 NOX STREAMING: NOX-conscious stream completed for message: ${messageId}`
+      );
+
+      if (onComplete) {
+        onComplete(finalMessage);
+      }
+
+      return finalMessage;
+    } catch (error) {
+      this.logger.error("Anthropic streaming API with system failed:", error);
+      throw error;
+    }
   }
 
   /**

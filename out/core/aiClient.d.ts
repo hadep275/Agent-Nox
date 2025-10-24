@@ -78,6 +78,10 @@ declare class AIClient {
      */
     updateConfiguration(configuration: any): Promise<void>;
     /**
+     * 🦊 Send streaming request with system prompt - NOX CONSCIOUSNESS
+     */
+    sendStreamingRequestWithSystem(systemPrompt: any, userPrompt: any, options?: {}, onChunk?: null, onComplete?: null, abortController?: null): Promise<void>;
+    /**
      * 🌊 Send streaming request to AI provider - REAL-TIME IMPLEMENTATION
      */
     sendStreamingRequest(prompt: any, options?: {}, onChunk?: null, onComplete?: null, abortController?: null): Promise<{
@@ -91,6 +95,19 @@ declare class AIClient {
         model: any;
     } | null>;
     /**
+     * 🦊 Send request with system prompt to AI provider - NOX CONSCIOUSNESS
+     */
+    sendRequestWithSystem(systemPrompt: any, userPrompt: any, options?: {}): Promise<{
+        id: string;
+        type: string;
+        content: any;
+        provider: string;
+        model: any;
+        tokens: any;
+        cost: number;
+        timestamp: string;
+    }>;
+    /**
      * 🤖 Send request to AI provider - REAL IMPLEMENTATION
      */
     sendRequest(prompt: any, options?: {}): Promise<{
@@ -99,6 +116,19 @@ declare class AIClient {
         model: any;
         tokens: any;
         cost: number;
+    }>;
+    /**
+     * 🦊 Call Anthropic Claude API with system prompt - NOX CONSCIOUSNESS
+     */
+    callAnthropicAPIWithSystem(apiKey: any, systemPrompt: any, userPrompt: any, options?: {}): Promise<{
+        id: string;
+        type: string;
+        content: any;
+        provider: string;
+        model: any;
+        tokens: any;
+        cost: number;
+        timestamp: string;
     }>;
     /**
      * 🤖 Call Anthropic Claude API
@@ -111,6 +141,19 @@ declare class AIClient {
         cost: number;
     }>;
     /**
+     * 🦊 Call OpenAI GPT API with system prompt - NOX CONSCIOUSNESS
+     */
+    callOpenAIAPIWithSystem(apiKey: any, systemPrompt: any, userPrompt: any, options?: {}): Promise<{
+        id: string;
+        type: string;
+        content: any;
+        provider: string;
+        model: any;
+        tokens: any;
+        cost: number;
+        timestamp: string;
+    }>;
+    /**
      * 🧠 Call OpenAI GPT API
      */
     callOpenAIAPI(apiKey: any, prompt: any, options?: {}): Promise<{
@@ -121,6 +164,32 @@ declare class AIClient {
         cost: number;
     }>;
     /**
+     * 🦊 Call OpenAI GPT Streaming API with system prompt - NOX CONSCIOUSNESS
+     */
+    callOpenAIStreamingAPIWithSystem(apiKey: any, systemPrompt: any, userPrompt: any, options: any, onChunk: any, onComplete: any, abortController?: null): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        provider: string;
+        model: any;
+        tokens: number;
+        cost: number;
+        timestamp: string;
+    }>;
+    /**
+     * 🦊 Call DeepSeek API with system prompt - NOX CONSCIOUSNESS
+     */
+    callDeepSeekAPIWithSystem(apiKey: any, systemPrompt: any, userPrompt: any, options?: {}): Promise<{
+        id: string;
+        type: string;
+        content: any;
+        provider: string;
+        model: any;
+        tokens: any;
+        cost: number;
+        timestamp: string;
+    }>;
+    /**
      * ⚡ Call DeepSeek API
      */
     callDeepSeekAPI(apiKey: any, prompt: any, options?: {}): Promise<{
@@ -129,6 +198,32 @@ declare class AIClient {
         model: any;
         tokens: any;
         cost: number;
+    }>;
+    /**
+     * 🦊 Call Local LLM API with system prompt - NOX CONSCIOUSNESS
+     */
+    callLocalAPIWithSystem(systemPrompt: any, userPrompt: any, options?: {}): Promise<{
+        id: string;
+        type: string;
+        content: any;
+        provider: string;
+        model: any;
+        tokens: number;
+        cost: number;
+        timestamp: string;
+    }>;
+    /**
+     * 🦊 Call DeepSeek Streaming API with system prompt - NOX CONSCIOUSNESS
+     */
+    callDeepSeekStreamingAPIWithSystem(apiKey: any, systemPrompt: any, userPrompt: any, options: any, onChunk: any, onComplete: any, abortController?: null): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        provider: string;
+        model: any;
+        tokens: number;
+        cost: number;
+        timestamp: string;
     }>;
     /**
      * 🏠 Call Local LLM API (Ollama/LM Studio)
@@ -144,6 +239,19 @@ declare class AIClient {
      * 💰 Calculate Anthropic API costs
      */
     calculateAnthropicCost(usage: any, model: any): number;
+    /**
+     * 🦊 Call Local LLM Streaming API with system prompt - NOX CONSCIOUSNESS
+     */
+    callLocalStreamingAPIWithSystem(systemPrompt: any, userPrompt: any, options: any, onChunk: any, onComplete: any, abortController?: null): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        provider: string;
+        model: any;
+        tokens: number;
+        cost: number;
+        timestamp: string;
+    }>;
     /**
      * 💰 Calculate OpenAI API costs
      */
@@ -237,6 +345,19 @@ declare class AIClient {
      * 📊 Estimate token count for streaming progress
      */
     estimateTokens(text: any): number;
+    /**
+     * 🦊 Anthropic Claude Streaming API with system prompt - NOX CONSCIOUSNESS
+     */
+    callAnthropicStreamingAPIWithSystem(apiKey: any, systemPrompt: any, userPrompt: any, options: any, onChunk: any, onComplete: any, abortController?: null): Promise<{
+        id: any;
+        type: string;
+        content: string;
+        provider: string;
+        model: any;
+        tokens: number;
+        cost: number;
+        timestamp: string;
+    }>;
     /**
      * 🌊 Anthropic Claude Streaming API
      */
