@@ -191,7 +191,7 @@ const SAKURA_AURORA = {
   },
   gradients: {
     primary:
-      "linear-gradient(135deg, #ffb6c1, #9370db, #dda0dd, #4b0082, #ffffff, #ffffff)",
+      "linear-gradient(135deg, #ffb6c1, #9370db, #dda0dd, #4b0082, #ffffff)",
     secondary: "linear-gradient(135deg, #2e1a2e, #2d1b2d, #ffffff)",
     accent: "linear-gradient(135deg, #ffc0cb, #e6e6fa, #98fb98, #ffffff)",
   },
@@ -218,9 +218,9 @@ const MIDNIGHT_AURORA = {
     "Deep focus theme with minimal distractions for intense coding sessions",
   category: "dark",
   colors: {
-    primary: "#191970", // Midnight Blue
+    primary: "#ffffff", // Midnight Blue
     secondary: "#000080", // Navy Blue
-    accent: "#ffffff", // Pure White (stars)
+    accent: "#191970", // Pure White (stars)
     tertiary: "#483d8b", // Dark Slate Blue
     quaternary: "#000000", // Pure Black (deep space)
     warning: "#c0c0c0", // Silver
@@ -243,7 +243,7 @@ const MIDNIGHT_AURORA = {
   },
   gradients: {
     primary:
-      "linear-gradient(135deg, #ffffff, #191970, #000080, #483d8b, #000000, #ffffff)",
+      "linear-gradient(135deg, #ffffff, #191970, #000080, #483d8b, #000000)",
     secondary: "linear-gradient(135deg, #111111, #1a1a1a, #ffffff)",
     accent: "linear-gradient(135deg, #c0c0c0, #add8e6, #00ff00, #ffffff)",
   },
@@ -289,7 +289,7 @@ const SOLAR_AURORA = {
   text: {
     primary: "#92400e", // Dark amber
     secondary: "#451a03", // Deep brown
-    muted: "#78716c", // Warm gray
+    muted: "#000000", // Warm gray
     inverse: "#ffffff", // White (for dark backgrounds)
   },
   gradients: {

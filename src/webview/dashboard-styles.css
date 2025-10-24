@@ -4,6 +4,7 @@
 
 :root {
   --aurora-blue: #4c9aff;
+  --aurora-blue-rgb: 76, 154, 255;
   --aurora-purple: #7c3aed;
   --aurora-green: #10b981;
   --aurora-pink: #f472b6;
@@ -53,8 +54,8 @@ body {
 }
 
 .back-btn {
-  background: rgba(76, 154, 255, 0.1);
-  border: 1px solid rgba(76, 154, 255, 0.3);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.1);
+  border: 1px solid rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.3);
   color: var(--aurora-blue);
   padding: 8px 12px;
   border-radius: 6px;
@@ -70,8 +71,8 @@ body {
 }
 
 .back-btn:hover {
-  background: rgba(76, 154, 255, 0.2);
-  border-color: rgba(76, 154, 255, 0.5);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.2);
+  border-color: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.5);
   transform: translateX(-2px);
 }
 
@@ -91,8 +92,8 @@ body {
 .filter-select,
 .export-btn {
   padding: 8px 16px;
-  background: rgba(76, 154, 255, 0.1);
-  border: 1px solid rgba(76, 154, 255, 0.3);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.1);
+  border: 1px solid rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.3);
   color: var(--text-primary);
   border-radius: 6px;
   cursor: pointer;
@@ -101,7 +102,7 @@ body {
 }
 
 .filter-select {
-  background-color: rgba(76, 154, 255, 0.1);
+  background-color: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.1);
   color: var(--text-primary);
 }
 
@@ -112,8 +113,8 @@ body {
 
 .filter-select:hover,
 .export-btn:hover {
-  background: rgba(76, 154, 255, 0.2);
-  border-color: rgba(76, 154, 255, 0.5);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.2);
+  border-color: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.5);
 }
 
 /* Export Dropdown */
@@ -127,7 +128,7 @@ body {
   right: 0;
   margin-top: 8px;
   background: var(--bg-dark);
-  border: 1px solid rgba(76, 154, 255, 0.3);
+  border: 1px solid rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.3);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 1000;
@@ -146,7 +147,7 @@ body {
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s ease;
-  border-bottom: 1px solid rgba(76, 154, 255, 0.1);
+  border-bottom: 1px solid rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.1);
 }
 
 .export-menu-item:last-child {
@@ -154,7 +155,7 @@ body {
 }
 
 .export-menu-item:hover {
-  background: rgba(76, 154, 255, 0.15);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.15);
   color: var(--aurora-blue);
   padding-left: 20px;
 }
@@ -177,7 +178,7 @@ body {
 
 .summary-card:hover {
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(76, 154, 255, 0.3);
+  border-color: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.3);
   transform: translateY(-2px);
 }
 
@@ -228,8 +229,8 @@ body {
 .chart-placeholder {
   width: 100%;
   height: 300px;
-  background: rgba(76, 154, 255, 0.05);
-  border: 1px dashed rgba(76, 154, 255, 0.2);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.05);
+  border: 1px dashed rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.2);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -268,7 +269,7 @@ table {
 th {
   text-align: left;
   padding: 12px;
-  background: rgba(76, 154, 255, 0.05);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.05);
   border-bottom: 1px solid var(--border-color);
   font-size: 12px;
   text-transform: uppercase;
@@ -283,7 +284,7 @@ td {
 }
 
 tr:hover {
-  background: rgba(76, 154, 255, 0.05);
+  background: rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.05);
 }
 
 /* Loading State */
@@ -298,7 +299,7 @@ tr:hover {
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(76, 154, 255, 0.2);
+  border: 3px solid rgba(var(--aurora-blue-rgb, 76, 154, 255), 0.2);
   border-top-color: var(--aurora-blue);
   border-radius: 50%;
   animation: spin 1s linear infinite;

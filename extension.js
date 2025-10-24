@@ -324,8 +324,12 @@ class NoxExtension {
         }
       );
 
-      // Set the HTML content
-      panel.webview.html = this.getSettingsPanelContent();
+      // Get current theme and generate CSS variables
+      const currentTheme = this.themeService.getCurrentTheme();
+      const cssVariables = this.themeService.generateCSSVariables(currentTheme);
+
+      // Set the HTML content with theme injected
+      panel.webview.html = this.getSettingsPanelContent(cssVariables);
 
       // Handle messages from the settings panel
       panel.webview.onDidReceiveMessage(async (message) => {
@@ -417,18 +421,34 @@ class NoxExtension {
               break;
             case "applyTheme":
               await this.applyTheme(message.themeId);
-              // Send confirmation back to settings panel
+
+              // Get updated theme and CSS variables
+              const updatedTheme = this.themeService.getCurrentTheme();
+              const updatedCSSVariables =
+                this.themeService.generateCSSVariables(updatedTheme);
+
+              // Send confirmation with updated theme to settings panel
               panel.webview.postMessage({
                 type: "themeApplied",
                 themeId: message.themeId,
+                theme: updatedTheme,
+                cssVariables: updatedCSSVariables,
               });
               break;
             case "resetTheme":
               await this.resetTheme();
-              // Send confirmation back to settings panel
+
+              // Get reset theme and CSS variables
+              const resetTheme = this.themeService.getCurrentTheme();
+              const resetCSSVariables =
+                this.themeService.generateCSSVariables(resetTheme);
+
+              // Send confirmation with updated theme to settings panel
               panel.webview.postMessage({
                 type: "themeApplied",
                 themeId: "classic",
+                theme: resetTheme,
+                cssVariables: resetCSSVariables,
               });
               break;
             case "getCurrentTheme":
@@ -506,8 +526,14 @@ class NoxExtension {
   /**
    * 📊 Get dashboard panel HTML content
    */
-  getDashboardPanelContent(webview) {
+  getDashboardPanelContent(webview, cssVariables = {}) {
     const nonce = this.getNonce();
+
+    // Generate CSS variable declarations from theme
+    const cssVariableDeclarations = Object.entries(cssVariables)
+      .map(([key, value]) => `${key}: ${value} !important;`)
+      .join("\n                ");
+
     const dashboardVendorsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this.context.extensionUri,
@@ -538,8 +564,15 @@ class NoxExtension {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net;">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${
+          webview.cspSource
+        } 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net;">
         <link rel="stylesheet" href="${stylesUri}">
+        <style nonce="${nonce}">
+          :root {
+            ${cssVariableDeclarations}
+          }
+        </style>
         <script nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
         <title>📊 Nox Performance Dashboard</title>
     </head>
@@ -612,6 +645,19 @@ class NoxExtension {
         <script nonce="${nonce}" src="${dashboardVendorsUri}"></script>
         <script nonce="${nonce}" src="${dashboardUri}"></script>
         <script nonce="${nonce}">
+            // Apply theme CSS variables to dashboard
+            (function() {
+              const themeVariables = ${JSON.stringify(cssVariables)};
+              const root = document.documentElement;
+
+              // Apply all CSS variables with !important to override defaults
+              Object.entries(themeVariables).forEach(([property, value]) => {
+                root.style.setProperty(property, value, 'important');
+              });
+
+              console.log('🎨 Dashboard theme applied');
+            })();
+
             // Back button handler - use the vscode API from dashboardPanel
             document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('backBtn')?.addEventListener('click', () => {
@@ -628,8 +674,13 @@ class NoxExtension {
   /**
    * 📄 Get settings panel HTML content
    */
-  getSettingsPanelContent() {
+  getSettingsPanelContent(cssVariables = {}) {
     const nonce = this.getNonce();
+
+    // Generate CSS variable declarations from theme
+    const cssVariableDeclarations = Object.entries(cssVariables)
+      .map(([key, value]) => `${key}: ${value} !important;`)
+      .join("\n                ");
 
     return `<!DOCTYPE html>
     <html lang="en">
@@ -639,9 +690,31 @@ class NoxExtension {
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
         <title>🦊 Nox Settings</title>
         <style>
+            :root {
+                --bg-primary: #1a1a2e;
+                --bg-secondary: #16213e;
+                --bg-tertiary: #0f3460;
+                --text-primary: #ffffff;
+                --text-secondary: #a0a9c0;
+                --text-muted: #6b7280;
+                --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                --gradient-success: linear-gradient(135deg, #10b981, #059669);
+                --color-primary: #667eea;
+                --color-secondary: #764ba2;
+                --color-success: #10b981;
+                --color-success-dark: #059669;
+                --color-info: #64b5f6;
+                --color-accent: #81c784;
+                --status-success: #4caf50;
+                --status-error: #f44336;
+                --status-warning: #ff5722;
+                --status-info: #ff9800;
+                ${cssVariableDeclarations}
+            }
+
             body {
                 font-family: var(--vscode-font-family);
-                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+                background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%);
                 color: var(--vscode-foreground);
                 margin: 0;
                 padding: 20px;
@@ -702,7 +775,7 @@ class NoxExtension {
             }
 
             .settings-nav button.active {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: var(--gradient-primary);
                 color: white;
             }
 
@@ -716,7 +789,7 @@ class NoxExtension {
 
             .section h2 {
                 margin-top: 0;
-                color: #64b5f6;
+                color: var(--color-info);
                 font-size: 24px;
                 margin-bottom: 20px;
             }
@@ -743,7 +816,7 @@ class NoxExtension {
 
             .provider-card h3 {
                 margin-top: 0;
-                color: #81c784;
+                color: var(--color-accent);
                 font-size: 18px;
             }
 
@@ -766,7 +839,7 @@ class NoxExtension {
 
             .api-key-input:focus {
                 outline: none;
-                border-color: #667eea;
+                border-color: var(--color-primary);
                 box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
             }
 
@@ -801,27 +874,27 @@ class NoxExtension {
             }
 
             .status-configured {
-                background: #4caf50;
+                background: var(--status-success);
                 color: white;
             }
 
             .status-missing {
-                background: #f44336;
+                background: var(--status-error);
                 color: white;
             }
 
             .status-error {
-                background: #ff5722;
+                background: var(--status-warning);
                 color: white;
             }
 
             .status-saving {
-                background: #ff9800;
+                background: var(--status-info);
                 color: white;
             }
 
             .btn {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: var(--gradient-primary);
                 color: white;
                 border: none;
                 padding: 10px 20px;
@@ -1737,17 +1810,22 @@ class NoxExtension {
             }
 
             function updateThemeButtons(activeThemeId) {
+                // Get CSS variables from root
+                const root = document.documentElement;
+                const successGradient = getComputedStyle(root).getPropertyValue('--gradient-success').trim();
+                const primaryGradient = getComputedStyle(root).getPropertyValue('--gradient-primary').trim();
+
                 // Update all theme buttons
                 document.querySelectorAll('.theme-btn').forEach(btn => {
                     const themeId = btn.getAttribute('data-theme');
                     if (themeId === activeThemeId) {
                         btn.textContent = 'Current Theme';
-                        btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                        btn.style.background = successGradient;
                         btn.style.color = 'white';
                         btn.disabled = true;
                     } else {
                         btn.textContent = 'Apply Theme';
-                        btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                        btn.style.background = primaryGradient;
                         btn.style.color = 'white';
                         btn.disabled = false;
                     }
@@ -1793,6 +1871,15 @@ class NoxExtension {
                 vscode.postMessage({ type: 'getCurrentTheme' });
             });
 
+            // Apply CSS variables to root element
+            function applyCSSVariables(cssVariables) {
+                const root = document.documentElement;
+                Object.entries(cssVariables).forEach(([key, value]) => {
+                    root.style.setProperty(key, value, 'important');
+                });
+                console.log('🎨 CSS variables applied to settings panel');
+            }
+
             // Handle theme messages from extension
             window.addEventListener('message', event => {
                 const message = event.data;
@@ -1801,7 +1888,12 @@ class NoxExtension {
                     updateThemeButtons(message.themeId);
                 } else if (message.type === 'themeApplied') {
                     updateThemeButtons(message.themeId);
-                    // Show success message could be added here
+
+                    // Apply CSS variables if provided
+                    if (message.cssVariables) {
+                        applyCSSVariables(message.cssVariables);
+                        console.log('🎨 Theme updated in settings panel:', message.themeId);
+                    }
                 } else if (message.type === 'injectCSS') {
                     // Execute CSS injection script for Aurora animations
                     try {
@@ -2494,8 +2586,15 @@ class NoxExtension {
         }
       );
 
-      // Set the HTML content
-      panel.webview.html = this.getDashboardPanelContent(panel.webview);
+      // Get current theme and generate CSS variables
+      const currentTheme = this.themeService.getCurrentTheme();
+      const cssVariables = this.themeService.generateCSSVariables(currentTheme);
+
+      // Set the HTML content with theme injected
+      panel.webview.html = this.getDashboardPanelContent(
+        panel.webview,
+        cssVariables
+      );
 
       // Handle messages from the dashboard
       panel.webview.onDidReceiveMessage(async (message) => {

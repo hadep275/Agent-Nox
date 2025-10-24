@@ -96,8 +96,37 @@ class DashboardPanel {
       if (message.type === "analyticsData") {
         this.analyticsData = message.data;
         this.renderDashboard();
+      } else if (
+        message.type === "themeApplied" ||
+        message.type === "injectCSS"
+      ) {
+        // Re-render charts when theme changes to apply new colors
+        if (this.analyticsData) {
+          this.renderCharts();
+        }
       }
     });
+  }
+
+  /**
+   * Get theme colors from CSS variables
+   */
+  getThemeColors() {
+    const root = document.documentElement;
+    const getVar = (varName) => {
+      return getComputedStyle(root).getPropertyValue(varName).trim();
+    };
+
+    return {
+      blue: getVar("--aurora-blue") || "#4c9aff",
+      purple: getVar("--aurora-purple") || "#7c3aed",
+      green: getVar("--aurora-green") || "#10b981",
+      pink: getVar("--aurora-pink") || "#f472b6",
+      cyan: getVar("--aurora-cyan") || "#06b6d4",
+      orange: getVar("--aurora-orange") || "#f59e0b",
+      textPrimary: getVar("--text-primary") || "#e0e0e0",
+      bgSecondary: getVar("--bg-secondary") || "#1e1e1e",
+    };
   }
 
   requestAnalyticsData(filterType = "lifetime", customDates = null) {
@@ -148,15 +177,8 @@ class DashboardPanel {
   renderCharts() {
     if (!this.analyticsData) return;
 
-    // Aurora theme colors
-    const colors = {
-      blue: "#4c9aff",
-      purple: "#7c3aed",
-      green: "#10b981",
-      pink: "#f472b6",
-      cyan: "#06b6d4",
-      orange: "#f59e0b",
-    };
+    // Get theme colors from CSS variables
+    const colors = this.getThemeColors();
 
     // Destroy existing charts
     Object.values(this.charts).forEach((chart) => chart.destroy());
@@ -307,7 +329,7 @@ class DashboardPanel {
           {
             data: costData,
             backgroundColor: colorArray.slice(0, providers.length),
-            borderColor: "#1e1e1e",
+            borderColor: colors.bgSecondary,
             borderWidth: 2,
           },
         ],
@@ -319,7 +341,7 @@ class DashboardPanel {
           legend: {
             position: "bottom",
             labels: {
-              color: "#e0e0e0",
+              color: colors.textPrimary,
               font: { size: 12 },
               padding: 15,
             },
@@ -355,6 +377,16 @@ class DashboardPanel {
       return cost;
     });
 
+    // Get grid and tick colors from CSS variables
+    const gridColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--bg-tertiary")
+        .trim() || "#333333";
+    const tickColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--text-secondary")
+        .trim() || "#a0a0a0";
+
     this.charts.costTrends = new Chart(ctx, {
       type: "line",
       data: {
@@ -370,7 +402,7 @@ class DashboardPanel {
             tension: 0.4,
             pointRadius: 4,
             pointBackgroundColor: colors.blue,
-            pointBorderColor: "#1e1e1e",
+            pointBorderColor: colors.bgSecondary,
             pointBorderWidth: 2,
           },
         ],
@@ -381,7 +413,7 @@ class DashboardPanel {
         plugins: {
           legend: {
             labels: {
-              color: "#e0e0e0",
+              color: colors.textPrimary,
               font: { size: 12 },
             },
           },
@@ -394,12 +426,12 @@ class DashboardPanel {
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { color: "#a0a0a0" },
-            grid: { color: "#333333" },
+            ticks: { color: tickColor },
+            grid: { color: gridColor },
           },
           x: {
-            ticks: { color: "#a0a0a0" },
-            grid: { color: "#333333" },
+            ticks: { color: tickColor },
+            grid: { color: gridColor },
           },
         },
       },
@@ -422,6 +454,16 @@ class DashboardPanel {
       return messages;
     });
 
+    // Get grid and tick colors from CSS variables
+    const gridColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--bg-tertiary")
+        .trim() || "#333333";
+    const tickColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--text-secondary")
+        .trim() || "#a0a0a0";
+
     this.charts.messagesPerDay = new Chart(ctx, {
       type: "bar",
       data: {
@@ -431,7 +473,7 @@ class DashboardPanel {
             label: "Messages",
             data: messagesData,
             backgroundColor: colors.purple,
-            borderColor: "#1e1e1e",
+            borderColor: colors.bgSecondary,
             borderWidth: 1,
           },
         ],
@@ -442,7 +484,7 @@ class DashboardPanel {
         plugins: {
           legend: {
             labels: {
-              color: "#e0e0e0",
+              color: colors.textPrimary,
               font: { size: 12 },
             },
           },
@@ -450,12 +492,12 @@ class DashboardPanel {
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { color: "#a0a0a0" },
-            grid: { color: "#333333" },
+            ticks: { color: tickColor },
+            grid: { color: gridColor },
           },
           x: {
-            ticks: { color: "#a0a0a0" },
-            grid: { color: "#333333" },
+            ticks: { color: tickColor },
+            grid: { color: gridColor },
           },
         },
       },
