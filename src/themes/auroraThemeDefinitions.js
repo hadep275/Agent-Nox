@@ -219,7 +219,7 @@ const MIDNIGHT_AURORA = {
   category: "dark",
   colors: {
     primary: "#ffffff", // Midnight Blue
-    secondary: "#000080", // Navy Blue
+    secondary: "#3462ba", // Navy Blue
     accent: "#191970", // Pure White (stars)
     tertiary: "#483d8b", // Dark Slate Blue
     quaternary: "#000000", // Pure Black (deep space)
@@ -243,7 +243,7 @@ const MIDNIGHT_AURORA = {
   },
   gradients: {
     primary:
-      "linear-gradient(135deg, #ffffff, #191970, #000080, #483d8b, #000000)",
+      "linear-gradient(135deg, #ffffff, #1b1b8e, #000080, #483d8b, #a7a2dcff)",
     secondary: "linear-gradient(135deg, #111111, #1a1a1a, #ffffff)",
     accent: "linear-gradient(135deg, #c0c0c0, #add8e6, #00ff00, #ffffff)",
   },
