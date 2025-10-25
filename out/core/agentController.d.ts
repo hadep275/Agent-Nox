@@ -781,6 +781,7 @@ declare class AgentController {
         reason: string;
         capabilityId: string;
         message: string;
+        autonomyLevel: string;
     }>;
     /**
      * 📊 Get capability execution statistics

@@ -605,6 +605,6 @@ declare class NoxContextBuilder {
     /**
      * 🔧 Detect project type
      */
-    detectProjectType(workspacePath: any): Promise<"unknown" | "go" | "node" | "python" | "rust" | "php" | "java" | "ruby" | "csharp">;
+    detectProjectType(workspacePath: any): Promise<"unknown" | "go" | "python" | "java" | "csharp" | "php" | "ruby" | "rust" | "node">;
 }
 //# sourceMappingURL=noxContextBuilder.d.ts.map
