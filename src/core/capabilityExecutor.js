@@ -3,6 +3,7 @@ const path = require("path");
 const NoxCodeGenerator = require("./codeGenerator");
 const NoxGitOperations = require("./gitOps");
 const NoxAutonomyManager = require("./autonomyManager");
+const TerminalManager = require("./terminalManager");
 
 /**
  * 🦊 NOX Capability Executor - Executes AI-suggested capabilities with user approval
@@ -66,6 +67,22 @@ class CapabilityExecutor {
           error.message
         );
         this.autonomyManager = null;
+      }
+
+      // 🔴 PHASE 2: Initialize terminal manager
+      try {
+        this.terminalManager = new TerminalManager(
+          logger,
+          performanceMonitor,
+          this.autonomyManager
+        );
+        this.logger.debug("✅ Terminal manager initialized");
+      } catch (error) {
+        this.logger.warn(
+          "⚠️ Terminal manager failed to initialize:",
+          error.message
+        );
+        this.terminalManager = null;
       }
 
       // Execution tracking
@@ -554,39 +571,22 @@ ${isTS ? "" : "module.exports = " + baseName + ";"}
         throw new Error("Missing command parameter");
       }
 
-      // For now, we'll show the command to the user instead of executing it
-      // In a more advanced implementation, we'd have a secure terminal execution system
-      const choice = await vscode.window.showInformationMessage(
-        `NOX suggests running this command:\n\n${command}\n\nWould you like to open a terminal to run it manually?`,
-        "Open Terminal",
-        "Copy Command",
-        "Cancel"
-      );
-
-      if (choice === "Open Terminal") {
-        const terminal = vscode.window.createTerminal("NOX Command");
-        terminal.show();
-        terminal.sendText(`# NOX suggested command:\n# ${command}`);
-
-        return {
-          success: true,
-          type: "terminal_command",
-          message: `Opened terminal with suggested command: ${command}`,
-        };
-      } else if (choice === "Copy Command") {
-        await vscode.env.clipboard.writeText(command);
-
-        return {
-          success: true,
-          type: "terminal_command",
-          message: `Copied command to clipboard: ${command}`,
-        };
+      // 🔴 PHASE 2: Use TerminalManager for real command execution
+      if (!this.terminalManager) {
+        throw new Error("Terminal manager not initialized");
       }
 
+      // Execute command with TerminalManager
+      const result = await this.terminalManager.executeCommand(command, {
+        terminalName: "NOX Command",
+      });
+
       return {
-        success: false,
+        success: result.success,
         type: "terminal_command",
-        message: "User cancelled command execution",
+        result,
+        message: result.message,
+        executed: result.executed,
       };
     } catch (error) {
       return {

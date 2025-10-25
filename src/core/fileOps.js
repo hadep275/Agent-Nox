@@ -108,6 +108,27 @@ class FileOps {
         throw new Error(`Failed to create file: ${filePath}`);
       }
 
+      // 🔴 PHASE 1 FIX: Refresh explorer to show new file
+      try {
+        await vscode.commands.executeCommand(
+          "workbench.files.action.refreshExplorerView"
+        );
+        this.logger.debug(`✅ Explorer refreshed for new file: ${filePath}`);
+      } catch (error) {
+        this.logger.warn(`⚠️ Failed to refresh explorer:`, error);
+        // Don't throw - file was created successfully, just explorer refresh failed
+      }
+
+      // 🔴 PHASE 1 FIX: Open file in editor for visibility
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc, { preview: false });
+        this.logger.debug(`✅ File opened in editor: ${filePath}`);
+      } catch (error) {
+        this.logger.debug(`⚠️ Could not open file in editor:`, error);
+        // Don't throw - file was created successfully, just couldn't open in editor
+      }
+
       // Complete operation
       this.completeOperation(operationId, "create", [filePath]);
       timer.end();
@@ -178,6 +199,16 @@ class FileOps {
 
       if (!success) {
         throw new Error(`Failed to edit file: ${filePath}`);
+      }
+
+      // 🔴 PHASE 1 FIX: Refresh explorer to show changes
+      try {
+        await vscode.commands.executeCommand(
+          "workbench.files.action.refreshExplorerView"
+        );
+        this.logger.debug(`✅ Explorer refreshed for edited file: ${filePath}`);
+      } catch (error) {
+        this.logger.warn(`⚠️ Failed to refresh explorer:`, error);
       }
 
       // Complete operation
@@ -254,6 +285,18 @@ class FileOps {
 
       if (!success) {
         throw new Error(`Failed to delete file: ${filePath}`);
+      }
+
+      // 🔴 PHASE 1 FIX: Refresh explorer to show deletion
+      try {
+        await vscode.commands.executeCommand(
+          "workbench.files.action.refreshExplorerView"
+        );
+        this.logger.debug(
+          `✅ Explorer refreshed after file deletion: ${filePath}`
+        );
+      } catch (error) {
+        this.logger.warn(`⚠️ Failed to refresh explorer:`, error);
       }
 
       // Complete operation

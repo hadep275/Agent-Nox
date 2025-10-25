@@ -837,6 +837,47 @@ class AgentController {
         }
       }
 
+      // Check for Git operations in user message and AI response
+      const gitOperations = this.detectGitOperations(
+        parameters.message || "",
+        aiResponse.content || ""
+      );
+
+      // Debug logging
+      this.logger.info(
+        `🔍 Detected ${gitOperations.length} Git operations from message: "${parameters.message}"`
+      );
+      if (gitOperations.length > 0) {
+        this.logger.info(`🔍 Git operations:`, gitOperations);
+      }
+
+      for (const gitOp of gitOperations) {
+        // Execute Git operations automatically if they're safe
+        if (gitOp.autoExecute) {
+          try {
+            const gitResult = await this.executeCapability(gitOp, noxContext);
+            result.capabilities.executed.push({
+              type: gitOp.type,
+              description: gitOp.description,
+              result: gitResult,
+            });
+          } catch (error) {
+            this.logger.error(
+              `Failed to execute Git operation ${gitOp.type}:`,
+              error
+            );
+            result.capabilities.suggested.push({
+              type: gitOp.type,
+              description: `${gitOp.description} (failed: ${error.message})`,
+              action: "manual_retry",
+            });
+          }
+        } else {
+          // Add to approval queue for destructive operations
+          result.capabilities.requiresApproval.push(gitOp);
+        }
+      }
+
       // Enhance response with context if user asks about specific files
       const mentionedFiles = this.extractFileMentions(parameters.message || "");
       if (mentionedFiles.length > 0) {
@@ -1042,6 +1083,91 @@ class AgentController {
         item.path.includes("__tests__") ||
         item.path.includes("tests")
     );
+  }
+
+  /**
+   * 🔍 Detect Git operations from user message and AI response
+   */
+  detectGitOperations(userMessage, aiResponse) {
+    const gitOperations = [];
+    const combinedText = `${userMessage} ${aiResponse}`.toLowerCase();
+
+    // Debug logging
+    this.logger.info(
+      `🔍 Git detection - User: "${userMessage}", AI: "${aiResponse.substring(
+        0,
+        100
+      )}..."`
+    );
+    this.logger.info(
+      `🔍 Combined text: "${combinedText.substring(0, 200)}..."`
+    );
+
+    // Git status - safe operation, auto-execute
+    if (
+      combinedText.includes("git status") ||
+      combinedText.includes("what's my git status") ||
+      combinedText.includes("check git") ||
+      combinedText.includes("repository status")
+    ) {
+      this.logger.info(`🔍 Detected Git status request!`);
+      gitOperations.push({
+        type: "git_status",
+        description: "Check Git repository status",
+        parameters: {},
+        autoExecute: true,
+        risk: "low",
+      });
+    }
+
+    // Git commit - requires approval
+    if (
+      combinedText.includes("git commit") ||
+      combinedText.includes("commit changes") ||
+      combinedText.includes("commit my changes")
+    ) {
+      gitOperations.push({
+        type: "git_commit",
+        description: "Commit current changes with intelligent message",
+        parameters: {
+          autoStage: true,
+        },
+        autoExecute: false,
+        risk: "medium",
+      });
+    }
+
+    // Git push - requires approval
+    if (
+      combinedText.includes("git push") ||
+      combinedText.includes("push changes") ||
+      combinedText.includes("push to github")
+    ) {
+      gitOperations.push({
+        type: "git_push",
+        description: "Push changes to remote repository",
+        parameters: {},
+        autoExecute: false,
+        risk: "medium",
+      });
+    }
+
+    // Branch creation - requires approval
+    const branchMatch = combinedText.match(
+      /create.*branch.*?(?:for|called|named)\s+([a-zA-Z0-9\-_]+)/
+    );
+    if (branchMatch || combinedText.includes("create branch")) {
+      const branchName = branchMatch ? branchMatch[1] : null;
+      gitOperations.push({
+        type: "git_branch_create",
+        description: `Create new branch${branchName ? ` '${branchName}'` : ""}`,
+        parameters: branchName ? { branchName } : {},
+        autoExecute: false,
+        risk: "low",
+      });
+    }
+
+    return gitOperations;
   }
 
   /**

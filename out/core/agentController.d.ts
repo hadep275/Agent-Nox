@@ -741,6 +741,31 @@ declare class AgentController {
      */
     detectTestFiles(noxContext: any): any;
     /**
+     * 🔍 Detect Git operations from user message and AI response
+     */
+    detectGitOperations(userMessage: any, aiResponse: any): ({
+        type: string;
+        description: string;
+        parameters: {
+            autoStage: boolean;
+            branchName?: undefined;
+        };
+        autoExecute: boolean;
+        risk: string;
+    } | {
+        type: string;
+        description: string;
+        parameters: {
+            branchName: string;
+            autoStage?: undefined;
+        } | {
+            autoStage?: undefined;
+            branchName?: undefined;
+        };
+        autoExecute: boolean;
+        risk: string;
+    })[];
+    /**
      * 🎯 Parse action items from chat response
      */
     parseActionItems(content: any): {
@@ -758,6 +783,7 @@ declare class AgentController {
     executeCapability(capability: any, context?: {}): Promise<{
         success: boolean;
         type: string;
+        result: any;
         message: string;
         error?: undefined;
     } | {
@@ -765,6 +791,7 @@ declare class AgentController {
         type: string;
         error: any;
         message: string;
+        result?: undefined;
     } | {
         success: boolean;
         type: any;

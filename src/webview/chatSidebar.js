@@ -271,6 +271,11 @@ class NoxChatViewProvider {
         message: aiMessageObj,
       });
 
+      // 🔴 PHASE 3: Execute capabilities from AI response
+      if (aiResponse.capabilities) {
+        await this.executeCapabilitiesFromResponse(aiResponse.capabilities);
+      }
+
       this.logger.info(
         `🦊 Chat exchange completed (${
           aiResponse.usage?.total_tokens || 0
@@ -365,7 +370,7 @@ class NoxChatViewProvider {
         });
       };
 
-      const onComplete = (finalMessage) => {
+      const onComplete = async (finalMessage) => {
         // Add final message to history
         this.chatHistory.push(finalMessage);
         this.saveChatHistory();
@@ -376,6 +381,49 @@ class NoxChatViewProvider {
           messageId: streamingMessageId,
           finalMessage: finalMessage,
         });
+
+        // 🦊 NOX: Check for Git operations after streaming completes
+        try {
+          const gitOperations = this.agentController.detectGitOperations(
+            userMessage,
+            finalMessage.content || ""
+          );
+
+          for (const gitOp of gitOperations) {
+            if (gitOp.autoExecute) {
+              try {
+                this.logger.info(
+                  `🦊 Auto-executing Git operation: ${gitOp.type}`
+                );
+                const gitResult = await this.agentController.executeCapability(
+                  gitOp,
+                  noxContext
+                );
+
+                // Send Git result to webview
+                this.sendMessageToWebview({
+                  type: "gitOperationResult",
+                  messageId: streamingMessageId,
+                  operation: gitOp,
+                  result: gitResult,
+                });
+              } catch (error) {
+                this.logger.error(
+                  `Failed to execute Git operation ${gitOp.type}:`,
+                  error
+                );
+                this.sendMessageToWebview({
+                  type: "gitOperationError",
+                  messageId: streamingMessageId,
+                  operation: gitOp,
+                  error: error.message,
+                });
+              }
+            }
+          }
+        } catch (error) {
+          this.logger.error("Error processing Git operations:", error);
+        }
 
         // 🔧 FIX: Don't immediately clean up AbortController - keep it for potential stop requests
         // Only clean up after a delay to allow stop button to work even after completion
@@ -1233,7 +1281,9 @@ class NoxChatViewProvider {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' ${this.webviewView.webview.cspSource} 'unsafe-eval'; font-src https:; media-src * data: blob:;">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' ${
+      this.webviewView.webview.cspSource
+    } 'unsafe-eval'; font-src https:; media-src * data: blob:;">
         <meta http-equiv="Permissions-Policy" content="microphone=*, camera=*, geolocation=*">
         <title>🦊 Nox Chat</title>
         <!-- Bundled styles will be injected here by webpack style-loader -->
@@ -1354,6 +1404,11 @@ class NoxChatViewProvider {
 
         <!-- Apply theme variables via JavaScript (double-layer protection) -->
         ${themeInitScript}
+
+        <!-- 🔴 PHASE 3: NOX Modal System (Scalable Modal Management) -->
+        <script nonce="${nonce}">
+${this.getModalSystemScript()}
+        </script>
     </body>
     </html>`;
   }
@@ -1381,6 +1436,23 @@ class NoxChatViewProvider {
     } catch (error) {
       this.logger.error("Failed to clear chat history:", error);
       this.sendErrorToWebview("Failed to clear chat history: " + error.message);
+    }
+  }
+
+  /**
+   * 🔴 PHASE 3: Get modal system script (embedded in webview)
+   */
+  getModalSystemScript() {
+    // Read the modal system file and embed it
+    const fs = require("fs");
+    const path = require("path");
+    try {
+      const modalSystemPath = path.join(__dirname, "noxModalSystem.js");
+      const modalSystemCode = fs.readFileSync(modalSystemPath, "utf8");
+      return modalSystemCode;
+    } catch (error) {
+      this.logger.warn("Failed to load modal system script:", error);
+      return "console.warn('Modal system not available');";
     }
   }
 
@@ -1548,6 +1620,78 @@ class NoxChatViewProvider {
       this.logger.info("🎤 Voice status sent to webview");
     } catch (error) {
       this.logger.error("🎤 Failed to send voice status:", error);
+    }
+  }
+
+  /**
+   * 🔴 PHASE 3: Execute capabilities from AI response
+   */
+  async executeCapabilitiesFromResponse(capabilities) {
+    try {
+      if (!capabilities) return;
+
+      // Execute capabilities that require approval
+      if (
+        capabilities.requiresApproval &&
+        capabilities.requiresApproval.length > 0
+      ) {
+        for (const capability of capabilities.requiresApproval) {
+          try {
+            this.logger.info(
+              `🔐 Requesting approval for: ${capability.description}`
+            );
+
+            // Execute capability (which will handle approval internally)
+            const result = await this.agentController.executeCapability(
+              capability
+            );
+
+            if (result.success) {
+              this.logger.info(
+                `✅ Capability executed: ${capability.description}`
+              );
+              this.sendMessageToWebview({
+                type: "capabilityExecuted",
+                capability: capability.type,
+                message: result.message,
+                success: true,
+              });
+            } else {
+              this.logger.warn(`⚠️ Capability failed: ${result.message}`);
+              this.sendMessageToWebview({
+                type: "capabilityExecuted",
+                capability: capability.type,
+                message: result.message,
+                success: false,
+              });
+            }
+          } catch (error) {
+            this.logger.error(`Failed to execute capability: ${error.message}`);
+          }
+        }
+      }
+
+      // Execute auto-executable capabilities
+      if (capabilities.executed && capabilities.executed.length > 0) {
+        for (const capability of capabilities.executed) {
+          try {
+            this.logger.info(`⚡ Auto-executing: ${capability.description}`);
+            const result = await this.agentController.executeCapability(
+              capability
+            );
+
+            if (result.success) {
+              this.logger.info(`✅ Auto-executed: ${capability.description}`);
+            }
+          } catch (error) {
+            this.logger.error(
+              `Failed to auto-execute capability: ${error.message}`
+            );
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error("Failed to execute capabilities from response:", error);
     }
   }
 }

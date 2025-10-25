@@ -437,6 +437,14 @@ class NoxChatApp {
         this.handleThemeChanged(message);
         break;
 
+      case 'gitOperationResult':
+        this.handleGitOperationResult(message);
+        break;
+
+      case 'gitOperationError':
+        this.handleGitOperationError(message);
+        break;
+
       default:
         console.warn('Unknown message type:', message.type);
     }
@@ -1328,6 +1336,116 @@ class NoxChatApp {
     this.state.isAIResponding = false;
 
     console.log('⏹️ Stream stopped for message:', messageId);
+  }
+
+  /**
+   * 🦊 Handle Git operation result
+   */
+  private handleGitOperationResult(message: any): void {
+    console.log('🦊 Git operation result:', message);
+
+    // Create a Git result message to display
+    const gitMessage: ChatMessage = {
+      id: `git-${Date.now()}`,
+      type: 'assistant',
+      content: this.formatGitResult(message.operation, message.result),
+      timestamp: new Date().toISOString(),
+      tokens: 0,
+      cost: 0
+    };
+
+    this.addMessage(gitMessage);
+    this.scrollToBottom();
+  }
+
+  /**
+   * 🦊 Handle Git operation error
+   */
+  private handleGitOperationError(message: any): void {
+    console.error('🦊 Git operation error:', message);
+
+    // Create a Git error message to display
+    const errorMessage: ChatMessage = {
+      id: `git-error-${Date.now()}`,
+      type: 'assistant',
+      content: `❌ **Git Operation Failed**\n\n**Operation**: ${message.operation.description}\n\n**Error**: ${message.error}`,
+      timestamp: new Date().toISOString(),
+      tokens: 0,
+      cost: 0
+    };
+
+    this.addMessage(errorMessage);
+    this.scrollToBottom();
+  }
+
+  /**
+   * 🦊 Format Git operation result for display
+   */
+  private formatGitResult(operation: any, result: any): string {
+    switch (operation.type) {
+      case 'git_status':
+        return this.formatGitStatus(result);
+      case 'git_commit':
+        return this.formatGitCommit(result);
+      case 'git_push':
+        return this.formatGitPush(result);
+      default:
+        return `✅ **${operation.description}**\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
+    }
+  }
+
+  /**
+   * 🦊 Format Git status result
+   */
+  private formatGitStatus(result: any): string {
+    if (!result.success) {
+      return `❌ **Git Status Failed**\n\n${result.message || result.error}`;
+    }
+
+    const status = result.result;
+    let content = `📊 **Git Repository Status**\n\n`;
+
+    if (!status.isRepo) {
+      content += `❌ Not a Git repository`;
+      return content;
+    }
+
+    content += `🌿 **Branch**: ${status.branch}\n`;
+    content += `📝 **Changes**: ${status.changes.length} file(s)\n\n`;
+
+    if (status.changes.length > 0) {
+      content += `**Modified Files:**\n`;
+      for (const change of status.changes) {
+        const icon = change.status === 'M' ? '📝' : change.status === 'A' ? '➕' : change.status === 'D' ? '❌' : '❓';
+        content += `${icon} ${change.file} (${change.status})\n`;
+      }
+    } else {
+      content += `✅ Working directory clean`;
+    }
+
+    return content;
+  }
+
+  /**
+   * 🦊 Format Git commit result
+   */
+  private formatGitCommit(result: any): string {
+    if (!result.success) {
+      return `❌ **Git Commit Failed**\n\n${result.message || result.error}`;
+    }
+
+    return `✅ **Commit Successful**\n\n**Hash**: \`${result.result.hash}\`\n**Message**: ${result.result.message}\n**Files**: ${result.result.files.length} file(s)`;
+  }
+
+  /**
+   * 🦊 Format Git push result
+   */
+  private formatGitPush(result: any): string {
+    if (!result.success) {
+      return `❌ **Git Push Failed**\n\n${result.message || result.error}`;
+    }
+
+    return `✅ **Push Successful**\n\n**Branch**: ${result.result.branch}\n**Remote**: ${result.result.remote}`;
   }
 }
 

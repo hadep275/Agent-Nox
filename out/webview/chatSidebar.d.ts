@@ -108,6 +108,10 @@ declare class NoxChatViewProvider {
      */
     getWebviewContent(): string;
     /**
+     * 🔴 PHASE 3: Get modal system script (embedded in webview)
+     */
+    getModalSystemScript(): string;
+    /**
      * 🎨 Generate a nonce for CSP
      */
     getNonce(): string;
@@ -135,6 +139,10 @@ declare class NoxChatViewProvider {
      * 🎤 Send current voice status to webview
      */
     sendVoiceStatus(): Promise<void>;
+    /**
+     * 🔴 PHASE 3: Execute capabilities from AI response
+     */
+    executeCapabilitiesFromResponse(capabilities: any): Promise<void>;
 }
 import VoiceRecordingService = require("../core/voiceRecordingService");
 //# sourceMappingURL=chatSidebar.d.ts.map

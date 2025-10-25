@@ -12,6 +12,7 @@ declare class CapabilityExecutor {
     codeGenerator: NoxCodeGenerator;
     gitOps: NoxGitOperations | null;
     autonomyManager: NoxAutonomyManager | null;
+    terminalManager: TerminalManager | null;
     pendingApprovals: Map<any, any>;
     executionHistory: any[];
     maxHistorySize: number;
@@ -22,6 +23,7 @@ declare class CapabilityExecutor {
     executeCapability(capability: any, context?: {}): Promise<{
         success: boolean;
         type: string;
+        result: any;
         message: string;
         error?: undefined;
     } | {
@@ -29,6 +31,7 @@ declare class CapabilityExecutor {
         type: string;
         error: any;
         message: string;
+        result?: undefined;
     } | {
         success: boolean;
         type: any;
@@ -118,13 +121,38 @@ declare class CapabilityExecutor {
     executeTerminalCommand(capability: any, context: any): Promise<{
         success: boolean;
         type: string;
+        result: {
+            success: boolean;
+            command: any;
+            executed: boolean;
+            message: string;
+            terminalName?: undefined;
+            error?: undefined;
+        } | {
+            success: boolean;
+            command: any;
+            executed: boolean;
+            terminalName: any;
+            message: string;
+            error?: undefined;
+        } | {
+            success: boolean;
+            command: any;
+            executed: boolean;
+            error: any;
+            message: string;
+            terminalName?: undefined;
+        };
         message: string;
+        executed: boolean;
         error?: undefined;
     } | {
         success: boolean;
         type: string;
         error: any;
         message: string;
+        result?: undefined;
+        executed?: undefined;
     }>;
     /**
      * 📦 Execute package installation capability
@@ -132,13 +160,38 @@ declare class CapabilityExecutor {
     executePackageInstallation(capability: any, context: any): Promise<{
         success: boolean;
         type: string;
+        result: {
+            success: boolean;
+            command: any;
+            executed: boolean;
+            message: string;
+            terminalName?: undefined;
+            error?: undefined;
+        } | {
+            success: boolean;
+            command: any;
+            executed: boolean;
+            terminalName: any;
+            message: string;
+            error?: undefined;
+        } | {
+            success: boolean;
+            command: any;
+            executed: boolean;
+            error: any;
+            message: string;
+            terminalName?: undefined;
+        };
         message: string;
+        executed: boolean;
         error?: undefined;
     } | {
         success: boolean;
         type: string;
         error: any;
         message: string;
+        result?: undefined;
+        executed?: undefined;
     }>;
     /**
      * 🔧 Execute generic capability
@@ -404,4 +457,5 @@ declare class CapabilityExecutor {
 import NoxCodeGenerator = require("./codeGenerator");
 import NoxGitOperations = require("./gitOps");
 import NoxAutonomyManager = require("./autonomyManager");
+import TerminalManager = require("./terminalManager");
 //# sourceMappingURL=capabilityExecutor.d.ts.map
