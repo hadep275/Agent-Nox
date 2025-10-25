@@ -27,6 +27,7 @@ class NoxExtension {
     this.chatSidebarProvider = null;
     this.themeService = null;
     this.isActivated = false;
+    this.debugMode = false;
   }
 
   /**
@@ -116,7 +117,16 @@ class NoxExtension {
       this.themeService = new EnterpriseThemeService(this.context);
       await this.themeService.initialize();
 
-      console.log("🦊 Core Step 7: Core services initialized!");
+      console.log("🦊 Core Step 7: Initializing debug mode...");
+      // Initialize debug mode from settings
+      const config = vscode.workspace.getConfiguration("nox");
+      this.debugMode = config.get("debugMode", false);
+      if (this.agentController && this.agentController.aiClient) {
+        this.agentController.aiClient.setDebugMode(this.debugMode);
+      }
+      this.logger.info(`🐛 Debug mode initialized: ${this.debugMode}`);
+
+      console.log("🦊 Core Step 8: Core services initialized!");
       this.logger.info("Core services initialized successfully");
     } catch (error) {
       console.error("🦊 Core initialization failed:", error);
@@ -460,6 +470,57 @@ class NoxExtension {
                 });
               }
               break;
+            case "updatePreference":
+              try {
+                const config = vscode.workspace.getConfiguration("nox");
+                await config.update(
+                  message.key,
+                  message.value,
+                  vscode.ConfigurationTarget.Global
+                );
+
+                // Update extension state if it's debugMode
+                if (message.key === "debugMode") {
+                  this.debugMode = message.value;
+                  if (this.agentController && this.agentController.aiClient) {
+                    this.agentController.aiClient.setDebugMode(message.value);
+                  }
+                  this.logger.info(
+                    `🐛 Debug mode ${message.value ? "enabled" : "disabled"}`
+                  );
+                }
+
+                panel.webview.postMessage({
+                  type: "preferenceUpdated",
+                  key: message.key,
+                  value: message.value,
+                });
+              } catch (error) {
+                this.logger.error(
+                  `Failed to update preference ${message.key}:`,
+                  error
+                );
+                panel.webview.postMessage({
+                  type: "error",
+                  message: `Failed to update preference: ${error.message}`,
+                });
+              }
+              break;
+            case "getPreferences":
+              try {
+                const config = vscode.workspace.getConfiguration("nox");
+                const debugMode = config.get("debugMode", false);
+                const logLevel = config.get("logLevel", "info");
+
+                panel.webview.postMessage({
+                  type: "preferencesData",
+                  debugMode,
+                  logLevel,
+                });
+              } catch (error) {
+                this.logger.error("Failed to get preferences:", error);
+              }
+              break;
             default:
               this.logger.warn(
                 `Unknown settings message type: ${message.type}`
@@ -506,6 +567,16 @@ class NoxExtension {
           if (event.affectsConfiguration("agent")) {
             this.logger.info("Agent configuration changed, updating...");
             await this.agentController.updateConfiguration();
+          }
+
+          // Handle Nox preferences changes
+          if (event.affectsConfiguration("nox.debugMode")) {
+            const config = vscode.workspace.getConfiguration("nox");
+            this.debugMode = config.get("debugMode", false);
+            if (this.agentController && this.agentController.aiClient) {
+              this.agentController.aiClient.setDebugMode(this.debugMode);
+            }
+            this.logger.info(`🐛 Debug mode updated: ${this.debugMode}`);
           }
         }
       );
@@ -864,6 +935,94 @@ class NoxExtension {
                 background: rgba(255, 255, 255, 0.1);
             }
 
+            /* 🐛 Debug Mode Toggle Switch */
+            .debug-toggle-switch {
+                display: inline-flex;
+                align-items: center;
+                gap: 12px;
+                cursor: pointer;
+            }
+
+            .toggle-switch {
+                position: relative;
+                width: 50px;
+                height: 28px;
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 14px;
+                transition: all 0.3s ease;
+                cursor: pointer;
+            }
+
+            .toggle-switch::after {
+                content: '';
+                position: absolute;
+                width: 24px;
+                height: 24px;
+                background: rgba(255, 255, 255, 0.3);
+                border-radius: 50%;
+                top: 2px;
+                left: 2px;
+                transition: all 0.3s ease;
+            }
+
+            input[type="checkbox"].debug-mode-checkbox {
+                display: none;
+            }
+
+            input[type="checkbox"].debug-mode-checkbox:checked + .toggle-switch {
+                background: var(--color-primary);
+                border-color: var(--color-primary);
+            }
+
+            input[type="checkbox"].debug-mode-checkbox:checked + .toggle-switch::after {
+                left: 24px;
+                background: white;
+            }
+
+            /* 📝 Select Dropdown Styling */
+            select {
+                width: 100%;
+                padding: 10px 12px;
+                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(255, 255, 255, 0.08);
+                color: var(--vscode-foreground);
+                font-size: 14px;
+                font-family: var(--vscode-font-family);
+                cursor: pointer;
+                transition: all 0.2s ease;
+                box-sizing: border-box;
+            }
+
+            select:hover {
+                background: rgba(255, 255, 255, 0.12);
+                border-color: rgba(255, 255, 255, 0.3);
+            }
+
+            select:focus {
+                outline: none;
+                border-color: var(--color-primary);
+                box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+                background: rgba(255, 255, 255, 0.1);
+            }
+
+            select option {
+                background: var(--bg-secondary);
+                color: var(--vscode-foreground);
+                padding: 8px;
+            }
+
+            select option:hover {
+                background: var(--color-primary);
+                color: white;
+            }
+
+            select option:checked {
+                background: var(--color-primary);
+                color: white;
+            }
+
             .status-indicator {
                 display: inline-block;
                 padding: 4px 8px;
@@ -926,6 +1085,7 @@ class NoxExtension {
                     <li><button class="nav-btn active" data-section="api-keys">🔑 API Keys</button></li>
                     <li><button class="nav-btn" data-section="voice">🎤 Voice Input</button></li>
                     <li><button class="nav-btn" data-section="theme">🎨 Theme</button></li>
+                    <li><button class="nav-btn" data-section="preferences">⚙️ Preferences</button></li>
                     <li><button class="nav-btn" data-section="performance">📊 Performance</button></li>
                     <li><button class="nav-btn" data-section="help">📖 Help & Documentation</button></li>
                     <li><button class="nav-btn" data-section="account">👤 Account</button></li>
@@ -1130,6 +1290,56 @@ class NoxExtension {
                     </div>
                 </div>
 
+                <div id="preferences" class="section">
+                    <h2>⚙️ Preferences</h2>
+                    <p>Customize Nox behavior and debugging options.</p>
+
+                    <div class="provider-grid">
+                        <div class="provider-card">
+                            <h3>🐛 Debug Mode</h3>
+                            <p>Enable detailed logging for troubleshooting. Shows per-chunk streaming logs and diagnostic information.</p>
+                            <div style="margin: 16px 0;">
+                                <label class="debug-toggle-switch">
+                                    <input type="checkbox" id="debugModeToggle" class="debug-mode-checkbox">
+                                    <div class="toggle-switch"></div>
+                                    <span style="cursor: pointer; user-select: none;">Enable Debug Mode</span>
+                                </label>
+                                <small style="color: #a0a9c0; display: block; margin-top: 12px;">
+                                    When enabled, you'll see detailed logs in the VS Code output channel. Useful for troubleshooting issues.
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="provider-card">
+                            <h3>📝 Log Level</h3>
+                            <p>Set the minimum log level to display in the output channel.</p>
+                            <div style="margin: 16px 0;">
+                                <select id="logLevelSelect">
+                                    <option value="debug">🐛 Debug - Show all logs</option>
+                                    <option value="info" selected>ℹ️ Info - Show info and above</option>
+                                    <option value="warn">⚠️ Warn - Show warnings and above</option>
+                                    <option value="error">❌ Error - Show errors only</option>
+                                </select>
+                                <small style="color: #a0a9c0; display: block; margin-top: 8px;">
+                                    Higher levels reduce console spam. Debug mode overrides this setting.
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="provider-card">
+                            <h3>💾 Preferences Info</h3>
+                            <p>Preferences are stored locally in VS Code settings.</p>
+                            <div style="margin: 16px 0; padding: 12px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; border-left: 3px solid #64b5f6;">
+                                <small style="color: #a0a9c0;">
+                                    <strong>Debug Mode:</strong> nox.debugMode<br>
+                                    <strong>Log Level:</strong> nox.logLevel<br><br>
+                                    These settings sync across all your VS Code workspaces.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="help" class="section">
                     <h2>📖 Help & Documentation</h2>
                     <div class="provider-grid">
@@ -1253,7 +1463,9 @@ class NoxExtension {
             // Initialize
             window.addEventListener('load', () => {
                 vscode.postMessage({ type: 'getProviderStatus' });
+                vscode.postMessage({ type: 'getPreferences' });
                 populateApiKeys();
+                setupPreferencesEventListeners();
             });
 
             function populateApiKeys() {
@@ -1862,6 +2074,32 @@ class NoxExtension {
                 }
             }
 
+            // Setup preferences event listeners
+            function setupPreferencesEventListeners() {
+                const debugModeToggle = document.getElementById('debugModeToggle');
+                const logLevelSelect = document.getElementById('logLevelSelect');
+
+                if (debugModeToggle) {
+                    debugModeToggle.addEventListener('change', (e) => {
+                        vscode.postMessage({
+                            type: 'updatePreference',
+                            key: 'debugMode',
+                            value: e.target.checked
+                        });
+                    });
+                }
+
+                if (logLevelSelect) {
+                    logLevelSelect.addEventListener('change', (e) => {
+                        vscode.postMessage({
+                            type: 'updatePreference',
+                            key: 'logLevel',
+                            value: e.target.value
+                        });
+                    });
+                }
+            }
+
             // Initialize theme UI when page loads
             window.addEventListener('load', () => {
                 // Setup event listeners for theme buttons
@@ -1880,7 +2118,7 @@ class NoxExtension {
                 console.log('🎨 CSS variables applied to settings panel');
             }
 
-            // Handle theme messages from extension
+            // Handle messages from extension
             window.addEventListener('message', event => {
                 const message = event.data;
 
@@ -1902,6 +2140,20 @@ class NoxExtension {
                     } catch (error) {
                         console.error('🎨 CSS injection failed:', error);
                     }
+                } else if (message.type === 'preferencesData') {
+                    // Update preferences UI with data from extension
+                    const debugModeToggle = document.getElementById('debugModeToggle');
+                    const logLevelSelect = document.getElementById('logLevelSelect');
+
+                    if (debugModeToggle) {
+                        debugModeToggle.checked = message.debugMode;
+                    }
+                    if (logLevelSelect) {
+                        logLevelSelect.value = message.logLevel;
+                    }
+                } else if (message.type === 'preferenceUpdated') {
+                    // Preference was successfully updated
+                    console.log('✅ Preference updated:', message.key, '=', message.value);
                 }
             });
         </script>

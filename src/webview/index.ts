@@ -44,6 +44,7 @@ declare const acquireVsCodeApi: () => VSCodeAPI;
 class NoxChatApp {
   private vscode: VSCodeAPI;
   private state: WebviewState;
+  private debugMode: boolean = false;
   private elements: {
     messagesContainer?: HTMLElement;
     messageInput?: HTMLTextAreaElement;
@@ -443,6 +444,12 @@ class NoxChatApp {
 
       case 'gitOperationError':
         this.handleGitOperationError(message);
+        break;
+
+      case 'preferencesData':
+        // Update debug mode from preferences
+        this.debugMode = message.debugMode;
+        console.log('🐛 Debug mode updated:', this.debugMode);
         break;
 
       default:
@@ -1291,7 +1298,9 @@ class NoxChatApp {
     // User can now scroll freely while streaming continues at bottom
     // Only scroll when streaming starts/completes, not on every chunk
 
-    console.log('🌊 Updated streaming message:', messageId, 'chunk length:', chunk.length, 'tokens:', tokens);
+    if (this.debugMode) {
+      console.log('🌊 Updated streaming message:', messageId, 'chunk length:', chunk.length, 'tokens:', tokens);
+    }
   }
 
   /**

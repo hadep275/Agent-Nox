@@ -13,6 +13,7 @@ class AIClient {
     this.isInitialized = false;
     this.currentProvider = "anthropic";
     this.currentModel = null; // Will be set to default model of current provider
+    this.debugMode = false; // Debug mode for detailed logging
     this.providers = {
       anthropic: {
         name: "🤖 Anthropic Claude",
@@ -138,6 +139,14 @@ class AIClient {
   async hasValidApiKey(provider) {
     const apiKey = await this.getApiKey(provider);
     return apiKey && apiKey.length > 0;
+  }
+
+  /**
+   * 🐛 Set debug mode for detailed logging
+   */
+  setDebugMode(enabled) {
+    this.debugMode = enabled;
+    this.logger.info(`🐛 Debug mode set to: ${enabled}`);
   }
 
   /**
@@ -964,9 +973,11 @@ class AIClient {
                 fullContent += chunkText;
                 totalTokens += 1; // Approximate token count
 
-                console.log(
-                  `🦊 NOX STREAMING: Processing NOX-conscious OpenAI chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
-                );
+                if (this.debugMode) {
+                  console.log(
+                    `🦊 NOX STREAMING: Processing NOX-conscious OpenAI chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                  );
+                }
 
                 if (onChunk) {
                   onChunk({
@@ -1252,9 +1263,11 @@ class AIClient {
                 fullContent += chunkText;
                 totalTokens += 1; // Approximate token count
 
-                console.log(
-                  `🦊 NOX STREAMING: Processing NOX-conscious DeepSeek chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
-                );
+                if (this.debugMode) {
+                  console.log(
+                    `🦊 NOX STREAMING: Processing NOX-conscious DeepSeek chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                  );
+                }
 
                 if (onChunk) {
                   onChunk({
@@ -1451,9 +1464,11 @@ class AIClient {
                 fullContent += chunkText;
                 totalTokens += 1; // Approximate token count
 
-                console.log(
-                  `🦊 NOX STREAMING: Processing NOX-conscious Local LLM chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
-                );
+                if (this.debugMode) {
+                  console.log(
+                    `🦊 NOX STREAMING: Processing NOX-conscious Local LLM chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                  );
+                }
 
                 if (onChunk) {
                   onChunk({
@@ -1893,9 +1908,11 @@ class AIClient {
                 fullContent += chunkText;
                 totalTokens += 1; // Approximate token count
 
-                console.log(
-                  `🦊 NOX STREAMING: Processing NOX-conscious chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
-                );
+                if (this.debugMode) {
+                  console.log(
+                    `🦊 NOX STREAMING: Processing NOX-conscious chunk for message: ${messageId}, abort state: ${abortController?.signal?.aborted}`
+                  );
+                }
 
                 if (onChunk) {
                   onChunk({
@@ -1930,9 +1947,11 @@ class AIClient {
         timestamp: new Date().toISOString(),
       };
 
-      console.log(
-        `🦊 NOX STREAMING: NOX-conscious stream completed for message: ${messageId}`
-      );
+      if (this.debugMode) {
+        console.log(
+          `🦊 NOX STREAMING: NOX-conscious stream completed for message: ${messageId}`
+        );
+      }
 
       if (onComplete) {
         onComplete(finalMessage);
@@ -2001,29 +2020,39 @@ class AIClient {
           // Check if stream was aborted
           if (abortController?.signal.aborted) {
             this.logger.info(`⏹️ Stream aborted for message: ${messageId}`);
-            console.log(
-              `🛑 AI CLIENT: Stream aborted in main loop for message: ${messageId}`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT: Stream aborted in main loop for message: ${messageId}`
+              );
+            }
             break;
           }
 
           // Check abort before reading
           if (abortController?.signal.aborted) {
-            console.log(
-              `🛑 AI CLIENT: Abort detected before read for message: ${messageId}`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT: Abort detected before read for message: ${messageId}`
+              );
+            }
             break;
           }
 
           const { done, value } = await reader.read();
           if (done) {
-            console.log(`🛑 AI CLIENT: Stream done for message: ${messageId}`);
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT: Stream done for message: ${messageId}`
+              );
+            }
             break;
           }
 
-          console.log(
-            `🛑 AI CLIENT: Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
-          );
+          if (this.debugMode) {
+            console.log(
+              `🛑 AI CLIENT: Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+            );
+          }
 
           const chunk = decoder.decode(value);
           const lines = chunk.split("\n");
@@ -2034,9 +2063,11 @@ class AIClient {
               this.logger.info(
                 `⏹️ Stream aborted during chunk processing: ${messageId}`
               );
-              console.log(
-                `🛑 AI CLIENT: Stream aborted during chunk processing: ${messageId}`
-              );
+              if (this.debugMode) {
+                console.log(
+                  `🛑 AI CLIENT: Stream aborted during chunk processing: ${messageId}`
+                );
+              }
               return null; // Exit early if aborted
             }
 
@@ -2379,34 +2410,42 @@ class AIClient {
             this.logger.info(
               `⏹️ DeepSeek stream aborted for message: ${messageId}`
             );
-            console.log(
-              `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
+              );
+            }
             break;
           }
 
           // 🔧 ROBUST ABORT CHECK: Check again before read
           if (isAborted || abortController?.signal.aborted) {
-            console.log(
-              `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId} (isAborted: ${isAborted}, signal.aborted: ${abortController?.signal.aborted})`
+              );
+            }
             break;
           }
 
           const { done, value } = await reader.read();
           if (done) {
-            console.log(
-              `🛑 AI CLIENT (DeepSeek): Stream done for message: ${messageId}`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT (DeepSeek): Stream done for message: ${messageId}`
+              );
+            }
             break;
           }
 
-          console.log(
-            `🛑 AI CLIENT (DeepSeek): Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
-          );
+          if (this.debugMode) {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+            );
+          }
 
           // 🔍 PHASE 1 DIAGNOSTICS: Enhanced chunk processing monitoring
-          if (abortController) {
+          if (this.debugMode && abortController) {
             console.log(
               `🔍 DEEPSEEK CHUNK: AbortController ID: ${
                 abortController._debugID || "NO_ID"
@@ -2570,12 +2609,14 @@ class AIClient {
       let fullContent = "";
       let totalTokens = 0;
 
-      console.log(
-        `🛑 AI CLIENT (DeepSeek): Starting stream loop for message: ${messageId}`
-      );
-      console.log(
-        `🛑 AI CLIENT (DeepSeek): Initial abort signal state: ${abortController?.signal.aborted}`
-      );
+      if (this.debugMode) {
+        console.log(
+          `🛑 AI CLIENT (DeepSeek): Starting stream loop for message: ${messageId}`
+        );
+        console.log(
+          `🛑 AI CLIENT (DeepSeek): Initial abort signal state: ${abortController?.signal.aborted}`
+        );
+      }
 
       try {
         while (true) {
@@ -2584,31 +2625,39 @@ class AIClient {
             this.logger.info(
               `⏹️ DeepSeek stream aborted for message: ${messageId}`
             );
-            console.log(
-              `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId}`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT (DeepSeek): Stream aborted in main loop for message: ${messageId}`
+              );
+            }
             break;
           }
 
           // Check abort before reading
           if (abortController?.signal.aborted) {
-            console.log(
-              `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId}`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT (DeepSeek): Abort detected before read for message: ${messageId}`
+              );
+            }
             break;
           }
 
           const { done, value } = await reader.read();
           if (done) {
-            console.log(
-              `🛑 AI CLIENT (DeepSeek): Stream done for message: ${messageId}`
-            );
+            if (this.debugMode) {
+              console.log(
+                `🛑 AI CLIENT (DeepSeek): Stream done for message: ${messageId}`
+              );
+            }
             break;
           }
 
-          console.log(
-            `🛑 AI CLIENT (DeepSeek): Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
-          );
+          if (this.debugMode) {
+            console.log(
+              `🛑 AI CLIENT (DeepSeek): Processing chunk for message: ${messageId}, abort state: ${abortController?.signal.aborted}`
+            );
+          }
 
           const chunk = decoder.decode(value);
           const lines = chunk.split("\n").filter((line) => line.trim());

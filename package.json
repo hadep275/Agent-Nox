@@ -287,6 +287,11 @@
             "error"
           ],
           "description": "📝 Logging level for Nox"
+        },
+        "nox.debugMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "🐛 Enable detailed logging for troubleshooting (shows per-chunk streaming logs)"
         }
       }
     }

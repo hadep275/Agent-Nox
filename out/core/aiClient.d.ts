@@ -11,6 +11,7 @@ declare class AIClient {
     isInitialized: boolean;
     currentProvider: string;
     currentModel: any;
+    debugMode: boolean;
     providers: {
         anthropic: {
             name: string;
@@ -53,6 +54,10 @@ declare class AIClient {
      * 🔍 Check if provider has valid API key
      */
     hasValidApiKey(provider: any): Promise<any>;
+    /**
+     * 🐛 Set debug mode for detailed logging
+     */
+    setDebugMode(enabled: any): void;
     /**
      * Initialize AI client with configuration
      */
