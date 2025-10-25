@@ -12,6 +12,7 @@ declare class AgentController {
     fileOps: import("./fileOps") | null;
     indexEngine: import("./indexEngine") | null;
     cacheManager: import("../storage/cacheManager") | null;
+    capabilityExecutor: import("./capabilityExecutor") | null;
     noxSystemPrompt: NoxSystemPrompt | null;
     noxCapabilities: NoxCapabilities | null;
     noxContextBuilder: NoxContextBuilder | null;
@@ -79,6 +80,7 @@ declare class AgentController {
             fileOps: boolean;
             indexEngine: boolean;
             cacheManager: boolean;
+            capabilityExecutor: boolean;
             noxSystemPrompt: boolean;
             noxCapabilities: boolean;
             noxContextBuilder: boolean;
@@ -111,6 +113,27 @@ declare class AgentController {
         model: any;
         tokens: any;
         cost: any;
+        noxContext: {
+            sessionId: any;
+            contextBuildTime: any;
+            relevanceScore: any;
+        };
+        capabilities: {
+            executed: never[];
+            suggested: never[];
+            requiresApproval: never[];
+        };
+    } | {
+        taskType: any;
+        parameters: any;
+        status: string;
+        timestamp: number;
+        content: any;
+        provider: any;
+        model: any;
+        tokens: any;
+        cost: any;
+        error: any;
         noxContext: {
             sessionId: any;
             contextBuildTime: any;
@@ -644,11 +667,134 @@ declare class AgentController {
             contextBuildTime: any;
             relevanceScore: any;
         };
+        capabilities: {
+            executed: never[];
+            suggested: never[];
+            requiresApproval: never[];
+        };
+    } | {
+        taskType: any;
+        parameters: any;
+        status: string;
+        timestamp: number;
+        content: any;
+        provider: any;
+        model: any;
+        tokens: any;
+        cost: any;
+        error: any;
+        noxContext: {
+            sessionId: any;
+            contextBuildTime: any;
+            relevanceScore: any;
+        };
     }>;
+    /**
+     * 🚀 Execute task-specific capabilities
+     */
+    executeTaskCapabilities(taskType: any, aiResponse: any, parameters: any, noxContext: any, result: any): Promise<void>;
+    /**
+     * 💡 Execute explain task capabilities
+     */
+    executeExplainCapabilities(aiResponse: any, parameters: any, noxContext: any, result: any): Promise<void>;
+    /**
+     * 🔧 Execute refactor task capabilities
+     */
+    executeRefactorCapabilities(aiResponse: any, parameters: any, noxContext: any, result: any): Promise<void>;
+    /**
+     * 📊 Execute analyze task capabilities
+     */
+    executeAnalyzeCapabilities(aiResponse: any, parameters: any, noxContext: any, result: any): Promise<void>;
+    /**
+     * 🚀 Execute generate task capabilities
+     */
+    executeGenerateCapabilities(aiResponse: any, parameters: any, noxContext: any, result: any): Promise<void>;
+    /**
+     * 💬 Execute chat task capabilities
+     */
+    executeChatCapabilities(aiResponse: any, parameters: any, noxContext: any, result: any): Promise<void>;
     /**
      * 💬 Add message to chat history
      */
     addToChatHistory(role: any, content: any, context: any): void;
+    /**
+     * 🔍 Parse capability suggestions from AI response
+     */
+    parseCapabilitySuggestions(content: any, result: any): Promise<void>;
+    /**
+     * 🔤 Extract keywords from text for context search
+     */
+    extractKeywords(text: any): string;
+    /**
+     * 📄 Extract code blocks from AI response
+     */
+    extractCodeBlocks(content: any): {
+        language: string;
+        code: string;
+    }[];
+    /**
+     * 📁 Suggest file name for generated code
+     */
+    suggestFileName(codeBlock: any, parameters: any): string | null;
+    /**
+     * 🧪 Detect test files in project
+     */
+    detectTestFiles(noxContext: any): any;
+    /**
+     * 🎯 Parse action items from chat response
+     */
+    parseActionItems(content: any): {
+        type: string;
+        description: string;
+        action: string;
+    }[];
+    /**
+     * 📄 Extract file mentions from text
+     */
+    extractFileMentions(text: any): string[];
+    /**
+     * 🚀 Execute capability from result
+     */
+    executeCapability(capability: any, context?: {}): Promise<{
+        success: boolean;
+        type: string;
+        message: string;
+        error?: undefined;
+    } | {
+        success: boolean;
+        type: string;
+        error: any;
+        message: string;
+    } | {
+        success: boolean;
+        type: any;
+        message: string;
+        suggestion: string;
+    } | {
+        success: boolean;
+        reason: string;
+        error: any;
+        capabilityId: string;
+        executionTime: any;
+    } | {
+        success: boolean;
+        reason: string;
+        capabilityId: string;
+        message: string;
+    }>;
+    /**
+     * 📊 Get capability execution statistics
+     */
+    getCapabilityStats(): {
+        totalExecutions: number;
+        successful: number;
+        failed: number;
+        successRate: number;
+        pendingApprovals: number;
+        recentExecutions: any[];
+    } | {
+        error: string;
+    };
     /**
      * 📝 Build user message for chat history
      */

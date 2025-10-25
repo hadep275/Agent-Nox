@@ -10,5 +10,13 @@ declare class AnalyzeCommand {
      * Execute the analyze command
      */
     execute(): Promise<void>;
+    /**
+     * Generate HTML for analysis report display
+     */
+    generateAnalysisHTML(result: any): string;
+    /**
+     * Basic markdown formatting
+     */
+    formatMarkdown(text: any): any;
 }
 //# sourceMappingURL=analyzeCommand.d.ts.map

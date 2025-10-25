@@ -35,11 +35,8 @@ export declare class NoxMarkdownRenderer {
     private escapeHtml;
 }
 /**
- * Global function for copy button functionality
+ * Initialize copy button functionality with proper event listeners
+ * This avoids CSP violations from inline onclick handlers
  */
-declare global {
-    interface Window {
-        copyCodeToClipboard: (button: HTMLButtonElement) => void;
-    }
-}
+export declare function initializeCopyButtons(): void;
 //# sourceMappingURL=markdown-renderer.d.ts.map

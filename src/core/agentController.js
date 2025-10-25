@@ -21,6 +21,7 @@ class AgentController {
     this.fileOps = null;
     this.indexEngine = null;
     this.cacheManager = null;
+    this.capabilityExecutor = null;
 
     // NOX consciousness components
     this.noxSystemPrompt = null;
@@ -149,6 +150,7 @@ class AgentController {
       const FileOps = require("./fileOps");
       const IndexEngine = require("./indexEngine");
       const CacheManager = require("../storage/cacheManager");
+      const CapabilityExecutor = require("./capabilityExecutor");
 
       // Initialize in dependency order
       this.cacheManager = new CacheManager(this.context, this.logger);
@@ -200,6 +202,14 @@ class AgentController {
         this.performanceMonitor
       );
 
+      // Initialize capability executor AFTER all other components
+      this.capabilityExecutor = new CapabilityExecutor(
+        this,
+        this.fileOps,
+        this.logger,
+        this.performanceMonitor
+      );
+
       this.logger.info(
         "Core components and NOX consciousness initialized successfully"
       );
@@ -220,12 +230,22 @@ class AgentController {
       { name: "fileOps", instance: this.fileOps },
       { name: "indexEngine", instance: this.indexEngine },
       { name: "cacheManager", instance: this.cacheManager },
+      { name: "capabilityExecutor", instance: this.capabilityExecutor },
     ];
 
     for (const component of components) {
-      if (!component.instance || !component.instance.isInitialized) {
+      if (!component.instance) {
+        throw new Error(`Component ${component.name} is null or undefined`);
+      }
+      if (!component.instance.isInitialized) {
+        this.logger.error(`Component ${component.name} validation failed:`, {
+          hasInstance: !!component.instance,
+          isInitialized: component.instance?.isInitialized,
+          componentType: typeof component.instance,
+          componentConstructor: component.instance?.constructor?.name,
+        });
         throw new Error(
-          `Component ${component.name} failed to initialize properly`
+          `Component ${component.name} failed to initialize properly (isInitialized: ${component.instance?.isInitialized})`
         );
       }
     }
@@ -306,6 +326,7 @@ class AgentController {
           (this.indexEngine && this.indexEngine.isInitialized) || false,
         cacheManager:
           (this.cacheManager && this.cacheManager.isInitialized) || false,
+        capabilityExecutor: !!this.capabilityExecutor,
         noxSystemPrompt: !!this.noxSystemPrompt,
         noxCapabilities: !!this.noxCapabilities,
         noxContextBuilder: !!this.noxContextBuilder,
@@ -444,7 +465,14 @@ class AgentController {
   /**
    * 🌊 Execute NOX streaming task with AI consciousness
    */
-  async executeNoxStreamingTask(systemPrompt, taskPrompt, parameters, onChunk, onComplete, abortController) {
+  async executeNoxStreamingTask(
+    systemPrompt,
+    taskPrompt,
+    parameters,
+    onChunk,
+    onComplete,
+    abortController
+  ) {
     // Send streaming request with proper system/user message structure
     await this.aiClient.sendStreamingRequestWithSystem(
       systemPrompt,
@@ -464,31 +492,363 @@ class AgentController {
    * 🔄 Process NOX result and execute capabilities
    */
   async processNoxResult(taskType, aiResponse, parameters, noxContext) {
-    const result = {
-      taskType,
-      parameters,
-      status: "completed",
-      timestamp: Date.now(),
-      content: aiResponse.content,
-      provider: aiResponse.provider,
-      model: aiResponse.model,
-      tokens: aiResponse.tokens,
-      cost: aiResponse.cost,
-      noxContext: {
-        sessionId: noxContext.sessionId,
-        contextBuildTime: noxContext.contextBuildTime,
-        relevanceScore: noxContext.relevanceScore,
-      },
-    };
+    const timer = this.performanceMonitor.startTimer(
+      `nox_capability_execution_${taskType}`
+    );
 
-    // TODO: Add capability execution logic here
-    // This will be enhanced in subsequent days to handle:
-    // - File operations
-    // - Terminal commands
-    // - Git operations
-    // - Web research
+    try {
+      this.logger.info(
+        `🦊 Processing NOX result for ${taskType} with capabilities`
+      );
 
-    return result;
+      const result = {
+        taskType,
+        parameters,
+        status: "completed",
+        timestamp: Date.now(),
+        content: aiResponse.content,
+        provider: aiResponse.provider,
+        model: aiResponse.model,
+        tokens: aiResponse.tokens,
+        cost: aiResponse.cost,
+        noxContext: {
+          sessionId: noxContext.sessionId,
+          contextBuildTime: noxContext.contextBuildTime,
+          relevanceScore: noxContext.relevanceScore,
+        },
+        capabilities: {
+          executed: [],
+          suggested: [],
+          requiresApproval: [],
+        },
+      };
+
+      // Execute task-specific capabilities
+      await this.executeTaskCapabilities(
+        taskType,
+        aiResponse,
+        parameters,
+        noxContext,
+        result
+      );
+
+      // Parse AI response for capability suggestions
+      await this.parseCapabilitySuggestions(aiResponse.content, result);
+
+      timer.end();
+      result.processingTime = timer.duration;
+
+      this.logger.info(
+        `🦊 NOX capabilities processed for ${taskType} (${timer.duration}ms)`
+      );
+      return result;
+    } catch (error) {
+      timer.end();
+      this.logger.error(
+        `Failed to process NOX capabilities for ${taskType}:`,
+        error
+      );
+
+      // Return basic result even if capability processing fails
+      return {
+        taskType,
+        parameters,
+        status: "completed_with_errors",
+        timestamp: Date.now(),
+        content: aiResponse.content,
+        provider: aiResponse.provider,
+        model: aiResponse.model,
+        tokens: aiResponse.tokens,
+        cost: aiResponse.cost,
+        error: error.message,
+        noxContext: {
+          sessionId: noxContext.sessionId,
+          contextBuildTime: noxContext.contextBuildTime,
+          relevanceScore: noxContext.relevanceScore,
+        },
+      };
+    }
+  }
+
+  /**
+   * 🚀 Execute task-specific capabilities
+   */
+  async executeTaskCapabilities(
+    taskType,
+    aiResponse,
+    parameters,
+    noxContext,
+    result
+  ) {
+    try {
+      this.logger.debug(`🚀 Executing capabilities for task: ${taskType}`);
+
+      switch (taskType) {
+        case "explain":
+          await this.executeExplainCapabilities(
+            aiResponse,
+            parameters,
+            noxContext,
+            result
+          );
+          break;
+        case "refactor":
+          await this.executeRefactorCapabilities(
+            aiResponse,
+            parameters,
+            noxContext,
+            result
+          );
+          break;
+        case "analyze":
+          await this.executeAnalyzeCapabilities(
+            aiResponse,
+            parameters,
+            noxContext,
+            result
+          );
+          break;
+        case "generate":
+          await this.executeGenerateCapabilities(
+            aiResponse,
+            parameters,
+            noxContext,
+            result
+          );
+          break;
+        case "chat":
+          await this.executeChatCapabilities(
+            aiResponse,
+            parameters,
+            noxContext,
+            result
+          );
+          break;
+        default:
+          this.logger.debug(
+            `No specific capabilities for task type: ${taskType}`
+          );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to execute capabilities for ${taskType}:`,
+        error
+      );
+      result.capabilities.errors = result.capabilities.errors || [];
+      result.capabilities.errors.push({
+        type: "capability_execution",
+        message: error.message,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * 💡 Execute explain task capabilities
+   */
+  async executeExplainCapabilities(aiResponse, parameters, noxContext, result) {
+    try {
+      // For explain tasks, we enhance the response with additional context
+      const { fileName, code } = parameters;
+
+      if (fileName && this.contextManager) {
+        // Get related files and symbols
+        const relatedContext = await this.contextManager.getContext(
+          this.extractKeywords(code || ""),
+          { maxFiles: 5, maxLines: 20 }
+        );
+
+        if (relatedContext.files.length > 0) {
+          result.capabilities.executed.push({
+            type: "context_enhancement",
+            description: "Enhanced explanation with related code context",
+            data: {
+              relatedFiles: relatedContext.files.length,
+              relatedSymbols: relatedContext.symbols.length,
+            },
+          });
+        }
+      }
+
+      // Suggest follow-up actions
+      result.capabilities.suggested.push({
+        type: "refactor_suggestion",
+        description: "Would you like me to suggest improvements for this code?",
+        action: "refactor",
+        parameters: { code: parameters.code, fileName: parameters.fileName },
+      });
+    } catch (error) {
+      this.logger.error("Failed to execute explain capabilities:", error);
+    }
+  }
+
+  /**
+   * 🔧 Execute refactor task capabilities
+   */
+  async executeRefactorCapabilities(
+    aiResponse,
+    parameters,
+    noxContext,
+    result
+  ) {
+    try {
+      const { fileName, code } = parameters;
+
+      // Parse AI response for actual code suggestions
+      const codeBlocks = this.extractCodeBlocks(aiResponse.content);
+
+      if (codeBlocks.length > 0 && fileName) {
+        // Suggest applying the refactoring
+        result.capabilities.requiresApproval.push({
+          type: "file_edit",
+          description: `Apply refactoring suggestions to ${fileName}`,
+          action: "apply_refactor",
+          parameters: {
+            fileName,
+            originalCode: code,
+            refactoredCode: codeBlocks[0].code,
+            language: codeBlocks[0].language,
+          },
+          risk: "medium",
+        });
+      }
+
+      // Suggest running tests after refactoring
+      if (this.detectTestFiles(noxContext)) {
+        result.capabilities.suggested.push({
+          type: "test_execution",
+          description:
+            "Run tests to verify refactoring doesn't break functionality",
+          action: "run_tests",
+        });
+      }
+    } catch (error) {
+      this.logger.error("Failed to execute refactor capabilities:", error);
+    }
+  }
+
+  /**
+   * 📊 Execute analyze task capabilities
+   */
+  async executeAnalyzeCapabilities(aiResponse, parameters, noxContext, result) {
+    try {
+      // Get comprehensive project statistics
+      const stats = this.indexEngine.getStats();
+      const contextStats = this.contextManager.getStats();
+
+      result.capabilities.executed.push({
+        type: "codebase_analysis",
+        description: "Performed comprehensive codebase analysis",
+        data: {
+          totalFiles: contextStats.totalFiles,
+          totalSymbols: contextStats.totalSymbols,
+          indexingTime: stats.lastIndexDuration,
+          projectStructure: noxContext.projectStructure?.length || 0,
+        },
+      });
+
+      // Suggest specific improvements based on analysis
+      if (contextStats.totalFiles > 100) {
+        result.capabilities.suggested.push({
+          type: "performance_optimization",
+          description:
+            "Large codebase detected - would you like performance optimization suggestions?",
+          action: "optimize_performance",
+        });
+      }
+
+      // Suggest security analysis
+      result.capabilities.suggested.push({
+        type: "security_analysis",
+        description: "Run security vulnerability scan on dependencies",
+        action: "security_scan",
+      });
+    } catch (error) {
+      this.logger.error("Failed to execute analyze capabilities:", error);
+    }
+  }
+
+  /**
+   * 🚀 Execute generate task capabilities
+   */
+  async executeGenerateCapabilities(
+    aiResponse,
+    parameters,
+    noxContext,
+    result
+  ) {
+    try {
+      // Parse generated code from AI response
+      const codeBlocks = this.extractCodeBlocks(aiResponse.content);
+
+      if (codeBlocks.length > 0) {
+        for (const codeBlock of codeBlocks) {
+          // Suggest creating files for generated code
+          const suggestedFileName = this.suggestFileName(codeBlock, parameters);
+
+          if (suggestedFileName) {
+            result.capabilities.requiresApproval.push({
+              type: "file_creation",
+              description: `Create ${suggestedFileName} with generated code`,
+              action: "create_file",
+              parameters: {
+                fileName: suggestedFileName,
+                content: codeBlock.code,
+                language: codeBlock.language,
+              },
+              risk: "low",
+            });
+          }
+        }
+      }
+
+      // Suggest related files that might need updates
+      if (parameters.type === "component" || parameters.type === "module") {
+        result.capabilities.suggested.push({
+          type: "dependency_update",
+          description: "Update import statements in related files",
+          action: "update_imports",
+        });
+      }
+    } catch (error) {
+      this.logger.error("Failed to execute generate capabilities:", error);
+    }
+  }
+
+  /**
+   * 💬 Execute chat task capabilities
+   */
+  async executeChatCapabilities(aiResponse, parameters, noxContext, result) {
+    try {
+      // Parse chat response for actionable items
+      const actionItems = this.parseActionItems(aiResponse.content);
+
+      for (const item of actionItems) {
+        if (item.type === "file_operation") {
+          result.capabilities.requiresApproval.push({
+            type: item.operation,
+            description: item.description,
+            action: item.action,
+            parameters: item.parameters,
+            risk: item.risk || "medium",
+          });
+        } else {
+          result.capabilities.suggested.push(item);
+        }
+      }
+
+      // Enhance response with context if user asks about specific files
+      const mentionedFiles = this.extractFileMentions(parameters.message || "");
+      if (mentionedFiles.length > 0) {
+        result.capabilities.executed.push({
+          type: "file_context",
+          description: "Enhanced response with file context",
+          data: { mentionedFiles },
+        });
+      }
+    } catch (error) {
+      this.logger.error("Failed to execute chat capabilities:", error);
+    }
   }
 
   /**
@@ -496,6 +856,253 @@ class AgentController {
    */
   addToChatHistory(role, content, context) {
     this.noxContextBuilder.addChatMessage(role, content, context);
+  }
+
+  /**
+   * 🔍 Parse capability suggestions from AI response
+   */
+  async parseCapabilitySuggestions(content, result) {
+    try {
+      // Look for common capability patterns in AI response
+      const suggestions = [];
+
+      // File creation suggestions
+      const fileCreationPattern =
+        /(?:create|generate|add)\s+(?:a\s+)?(?:new\s+)?file\s+(?:called\s+)?["`']?([^"`'\s]+\.[a-zA-Z]+)["`']?/gi;
+      let match;
+      while ((match = fileCreationPattern.exec(content)) !== null) {
+        suggestions.push({
+          type: "file_creation",
+          description: `Create file: ${match[1]}`,
+          action: "create_file",
+          parameters: { fileName: match[1] },
+        });
+      }
+
+      // Terminal command suggestions
+      const commandPattern = /(?:run|execute)\s+["`']([^"`']+)["`']/gi;
+      while ((match = commandPattern.exec(content)) !== null) {
+        suggestions.push({
+          type: "terminal_command",
+          description: `Run command: ${match[1]}`,
+          action: "run_command",
+          parameters: { command: match[1] },
+          risk: "medium",
+        });
+      }
+
+      // Package installation suggestions
+      const packagePattern =
+        /(?:install|add)\s+(?:package\s+)?["`']?([a-zA-Z0-9@\-_\/]+)["`']?/gi;
+      while ((match = packagePattern.exec(content)) !== null) {
+        suggestions.push({
+          type: "package_installation",
+          description: `Install package: ${match[1]}`,
+          action: "install_package",
+          parameters: { package: match[1] },
+          risk: "low",
+        });
+      }
+
+      // Add suggestions to result
+      result.capabilities.suggested.push(...suggestions);
+    } catch (error) {
+      this.logger.error("Failed to parse capability suggestions:", error);
+    }
+  }
+
+  /**
+   * 🔤 Extract keywords from text for context search
+   */
+  extractKeywords(text) {
+    if (!text) return "";
+
+    // Extract meaningful words (functions, classes, variables)
+    const words = text.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g) || [];
+    const keywords = words.filter(
+      (word) =>
+        word.length > 2 &&
+        ![
+          "the",
+          "and",
+          "for",
+          "are",
+          "but",
+          "not",
+          "you",
+          "all",
+          "can",
+          "had",
+          "her",
+          "was",
+          "one",
+          "our",
+          "out",
+          "day",
+          "get",
+          "has",
+          "him",
+          "his",
+          "how",
+          "man",
+          "new",
+          "now",
+          "old",
+          "see",
+          "two",
+          "way",
+          "who",
+          "boy",
+          "did",
+          "its",
+          "let",
+          "put",
+          "say",
+          "she",
+          "too",
+          "use",
+        ].includes(word.toLowerCase())
+    );
+
+    return [...new Set(keywords)].slice(0, 10).join(" ");
+  }
+
+  /**
+   * 📄 Extract code blocks from AI response
+   */
+  extractCodeBlocks(content) {
+    const codeBlocks = [];
+    const codeBlockPattern = /```(\w+)?\n([\s\S]*?)```/g;
+
+    let match;
+    while ((match = codeBlockPattern.exec(content)) !== null) {
+      codeBlocks.push({
+        language: match[1] || "text",
+        code: match[2].trim(),
+      });
+    }
+
+    return codeBlocks;
+  }
+
+  /**
+   * 📁 Suggest file name for generated code
+   */
+  suggestFileName(codeBlock, parameters) {
+    const { language, code } = codeBlock;
+
+    // Try to extract class or function names
+    let name = null;
+
+    if (language === "javascript" || language === "typescript") {
+      const classMatch = code.match(/class\s+(\w+)/);
+      const functionMatch = code.match(/(?:function\s+|const\s+)(\w+)/);
+      name = classMatch?.[1] || functionMatch?.[1];
+    } else if (language === "python") {
+      const classMatch = code.match(/class\s+(\w+)/);
+      const functionMatch = code.match(/def\s+(\w+)/);
+      name = classMatch?.[1] || functionMatch?.[1];
+    }
+
+    if (name) {
+      const extensions = {
+        javascript: ".js",
+        typescript: ".ts",
+        python: ".py",
+        java: ".java",
+        csharp: ".cs",
+        go: ".go",
+        rust: ".rs",
+      };
+
+      const ext = extensions[language] || ".txt";
+      return `${name.toLowerCase()}${ext}`;
+    }
+
+    // Fallback based on parameters
+    if (parameters.type) {
+      return `${parameters.type.toLowerCase()}.${
+        language === "typescript" ? "ts" : "js"
+      }`;
+    }
+
+    return null;
+  }
+
+  /**
+   * 🧪 Detect test files in project
+   */
+  detectTestFiles(noxContext) {
+    if (!noxContext.projectStructure) return false;
+
+    return noxContext.projectStructure.some(
+      (item) =>
+        item.name.includes("test") ||
+        item.name.includes("spec") ||
+        item.path.includes("__tests__") ||
+        item.path.includes("tests")
+    );
+  }
+
+  /**
+   * 🎯 Parse action items from chat response
+   */
+  parseActionItems(content) {
+    const actionItems = [];
+
+    // Look for explicit action suggestions
+    const actionPattern =
+      /(?:I suggest|I recommend|You should|Consider)\s+([^.!?]+)/gi;
+    let match;
+
+    while ((match = actionPattern.exec(content)) !== null) {
+      const suggestion = match[1].trim();
+
+      actionItems.push({
+        type: "suggestion",
+        description: suggestion,
+        action: "manual_action",
+      });
+    }
+
+    return actionItems;
+  }
+
+  /**
+   * 📄 Extract file mentions from text
+   */
+  extractFileMentions(text) {
+    const filePattern = /(?:^|\s)([a-zA-Z0-9_\-\/]+\.[a-zA-Z]+)(?:\s|$)/g;
+    const files = [];
+    let match;
+
+    while ((match = filePattern.exec(text)) !== null) {
+      files.push(match[1]);
+    }
+
+    return [...new Set(files)];
+  }
+
+  /**
+   * 🚀 Execute capability from result
+   */
+  async executeCapability(capability, context = {}) {
+    if (!this.capabilityExecutor) {
+      throw new Error("Capability executor not initialized");
+    }
+
+    return await this.capabilityExecutor.executeCapability(capability, context);
+  }
+
+  /**
+   * 📊 Get capability execution statistics
+   */
+  getCapabilityStats() {
+    if (!this.capabilityExecutor) {
+      return { error: "Capability executor not initialized" };
+    }
+
+    return this.capabilityExecutor.getStats();
   }
 
   /**
@@ -539,6 +1146,9 @@ class AgentController {
       }
       if (this.cacheManager) {
         cleanupPromises.push(this.cacheManager.cleanup());
+      }
+      if (this.capabilityExecutor) {
+        cleanupPromises.push(this.capabilityExecutor.cleanup());
       }
 
       await Promise.all(cleanupPromises);

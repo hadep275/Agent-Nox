@@ -64,7 +64,7 @@ export class NoxMarkdownRenderer {
         <div class="nox-code-block" data-language="${validLanguage}">
           <div class="nox-code-header">
             <span class="nox-code-language">${this.getLanguageDisplayName(validLanguage)}</span>
-            <button class="nox-copy-btn" onclick="copyCodeToClipboard(this)" title="Copy code">
+            <button class="nox-copy-btn" data-copy-target="code" title="Copy code">
               <span class="copy-icon">📋</span>
             </button>
           </div>
@@ -223,32 +223,99 @@ export class NoxMarkdownRenderer {
 }
 
 /**
- * Global function for copy button functionality
+ * Initialize copy button functionality with proper event listeners
+ * This avoids CSP violations from inline onclick handlers
  */
-declare global {
-  interface Window {
-    copyCodeToClipboard: (button: HTMLButtonElement) => void;
+export function initializeCopyButtons(): void {
+  // Set up event delegation for copy buttons
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const copyButton = target.closest('.nox-copy-btn') as HTMLButtonElement;
+
+    if (copyButton) {
+      event.preventDefault();
+      copyCodeToClipboard(copyButton);
+    }
+  });
+}
+
+/**
+ * Copy code to clipboard functionality
+ */
+function copyCodeToClipboard(button: HTMLButtonElement): void {
+  const codeBlock = button.closest('.nox-code-block');
+  const codeContent = codeBlock?.querySelector('code');
+
+  if (codeContent) {
+    const code = codeContent.textContent || '';
+
+    // Use the Clipboard API if available
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => {
+        showCopySuccess(button);
+      }).catch(err => {
+        console.error('Failed to copy code with Clipboard API:', err);
+        fallbackCopyToClipboard(code, button);
+      });
+    } else {
+      // Fallback for older browsers or restricted contexts
+      fallbackCopyToClipboard(code, button);
+    }
   }
 }
 
-// Add global copy function
-window.copyCodeToClipboard = (button: HTMLButtonElement) => {
-  const codeBlock = button.closest('.nox-code-block');
-  const codeContent = codeBlock?.querySelector('code');
-  
-  if (codeContent) {
-    const code = codeContent.textContent || '';
-    navigator.clipboard.writeText(code).then(() => {
-      const icon = button.querySelector('.copy-icon');
-      if (icon) {
-        const originalText = icon.textContent;
-        icon.textContent = '✅';
-        setTimeout(() => {
-          icon.textContent = originalText;
-        }, 2000);
-      }
-    }).catch(err => {
-      console.error('Failed to copy code:', err);
-    });
+/**
+ * Fallback copy method for environments without Clipboard API
+ */
+function fallbackCopyToClipboard(text: string, button: HTMLButtonElement): void {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  textArea.style.top = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    const successful = document.execCommand('copy');
+    if (successful) {
+      showCopySuccess(button);
+    } else {
+      showCopyError(button);
+    }
+  } catch (err) {
+    console.error('Fallback copy failed:', err);
+    showCopyError(button);
+  } finally {
+    document.body.removeChild(textArea);
   }
-};
+}
+
+/**
+ * Show copy success feedback
+ */
+function showCopySuccess(button: HTMLButtonElement): void {
+  const icon = button.querySelector('.copy-icon');
+  if (icon) {
+    const originalText = icon.textContent;
+    icon.textContent = '✅';
+    setTimeout(() => {
+      icon.textContent = originalText;
+    }, 2000);
+  }
+}
+
+/**
+ * Show copy error feedback
+ */
+function showCopyError(button: HTMLButtonElement): void {
+  const icon = button.querySelector('.copy-icon');
+  if (icon) {
+    const originalText = icon.textContent;
+    icon.textContent = '❌';
+    setTimeout(() => {
+      icon.textContent = originalText;
+    }, 2000);
+  }
+}

@@ -9,7 +9,7 @@ import './markdown-styles.css';
 
 // Import markdown test module
 import { MarkdownTester } from './markdown-test';
-import { NoxMarkdownRenderer } from './markdown-renderer';
+import { NoxMarkdownRenderer, initializeCopyButtons } from './markdown-renderer';
 
 // Import types and components
 import {
@@ -124,6 +124,9 @@ class NoxChatApp {
 
     // Initialize speech recognition
     this.initializeSpeechRecognition();
+
+    // Initialize copy button functionality
+    initializeCopyButtons();
 
     // Setup event listeners
     this.setupEventListeners();
